@@ -69,7 +69,7 @@ def accept_cookies(page: Page):
         log.debug("No se encontró diálogo de cookies (ya aceptado o no presente)")
 
 
-def scroll_feed(page: Page) -> int:
+def scroll_feed(page: Page, max_scrolls: int = MAX_SCROLLS) -> int:
     """
     Hace scroll en el panel lateral de resultados de Google Maps
     hasta que no aparezcan más resultados nuevos.
@@ -86,7 +86,7 @@ def scroll_feed(page: Page) -> int:
     prev_count = 0
     no_change = 0  # Contador de scrolls sin resultados nuevos
 
-    for i in range(MAX_SCROLLS):
+    for i in range(max_scrolls):
         count = feed.locator('a[href*="/maps/place/"]').count()
 
         if count == prev_count:
@@ -219,11 +219,19 @@ def _get_address(page: Page) -> str:
 # LÓGICA PRINCIPAL
 # ==============================================================
 
-def extract_lead(page: Page, url: str, city: str) -> Lead | None:
+def extract_lead(
+    page: Page,
+    url: str,
+    city: str,
+    min_rating: float = MIN_RATING,
+    min_reviews: int = MIN_REVIEWS,
+    require_website: str = "required",
+) -> Lead | None:
     """
     Navega a la URL de un local en Google Maps, extrae los datos
     y aplica los filtros de cualificación.
 
+    require_website: 'required' = solo con web | 'none' = solo sin web | 'any' = todos
     Retorna un Lead si cualifica, o None si no pasa los filtros.
     """
     try:
@@ -244,21 +252,25 @@ def extract_lead(page: Page, url: str, city: str) -> Lead | None:
 
     # --- Filtro: Puntuación ---
     rating = _get_rating(page)
-    if rating < MIN_RATING:
-        log.info(f"  ✗ {nombre} — rating {rating} (mín: {MIN_RATING})")
+    if rating < min_rating:
+        log.info(f"  ✗ {nombre} — rating {rating} (mín: {min_rating})")
         return None
 
     # --- Filtro: Reseñas ---
     reviews = _get_reviews(page)
-    if reviews < MIN_REVIEWS:
-        log.info(f"  ✗ {nombre} — {reviews} reseñas (mín: {MIN_REVIEWS})")
+    if reviews < min_reviews:
+        log.info(f"  ✗ {nombre} — {reviews} reseñas (mín: {min_reviews})")
         return None
 
-    # --- Filtro: Web obligatoria ---
+    # --- Filtro: Sitio web ---
     website = _get_website(page)
-    if not website:
+    if require_website == "required" and not website:
         log.info(f"  ✗ {nombre} — sin página web")
         return None
+    elif require_website == "none" and website:
+        log.info(f"  ✗ {nombre} — tiene web (filtro: solo sin web)")
+        return None
+    # require_website == 'any' → no filter
 
     # --- Datos opcionales ---
     telefono = _get_phone(page)
@@ -277,12 +289,20 @@ def extract_lead(page: Page, url: str, city: str) -> Lead | None:
     return lead
 
 
-def scrape_city(page: Page, city: str) -> list:
+def scrape_city(
+    page: Page,
+    city: str,
+    search_query: str = SEARCH_QUERY,
+    min_rating: float = MIN_RATING,
+    min_reviews: int = MIN_REVIEWS,
+    require_website: str = "required",
+    max_scrolls: int = MAX_SCROLLS,
+) -> list:
     """
     Ejecuta el scraping completo para una ciudad:
     buscar → scroll → recopilar URLs → extraer datos de cada una.
     """
-    query = SEARCH_QUERY.format(city=city)
+    query = search_query.format(city=city)
     url = f"https://www.google.com/maps/search/{quote_plus(query)}/"
 
     log.info(f"\n{'=' * 50}")
@@ -296,7 +316,7 @@ def scrape_city(page: Page, city: str) -> list:
     accept_cookies(page)
 
     # Scroll para cargar todos los resultados
-    scroll_feed(page)
+    scroll_feed(page, max_scrolls)
 
     # Recopilar URLs de los resultados
     place_urls = collect_urls(page)
@@ -305,7 +325,7 @@ def scrape_city(page: Page, city: str) -> list:
     leads = []
     for i, place_url in enumerate(place_urls):
         log.info(f"  [{i + 1}/{len(place_urls)}] Procesando...")
-        lead = extract_lead(page, place_url, city)
+        lead = extract_lead(page, place_url, city, min_rating, min_reviews, require_website)
         if lead:
             leads.append(lead)
         _sleep(DELAY_BETWEEN_RESULTS)
@@ -386,16 +406,23 @@ def save_leads(leads: list):
 # PUNTO DE ENTRADA
 # ==============================================================
 
-def run(cities: list | None = None, headless: bool = False):
+def run(cities: list | None = None, headless: bool = False, profile: dict | None = None):
     """
     Ejecuta el scraper completo.
     Acumula leads existentes de leads_raw.json para no repetir.
 
     Args:
-        cities:   Lista de ciudades (None = todas las de config.py)
+        cities:   Lista de ciudades (None = usa perfil o config.py)
         headless: True = navegador invisible / False = puedes verlo en pantalla
+        profile:  Dict con parámetros del personalizador de scrap (opcional)
     """
-    targets = cities or CITIES
+    cfg = profile or {}
+    targets = cities or (json.loads(cfg["ciudades"]) if cfg.get("ciudades") else None) or CITIES
+    search_query = cfg.get("search_query", SEARCH_QUERY)
+    min_rating = float(cfg.get("min_rating", MIN_RATING))
+    min_reviews = int(cfg.get("min_reviews", MIN_REVIEWS))
+    require_website = cfg.get("require_website", "required")
+    max_scrolls = int(cfg.get("max_scrolls", MAX_SCROLLS))
 
     # Cargar leads existentes para no repetir
     existing = load_existing_leads()
@@ -403,7 +430,8 @@ def run(cities: list | None = None, headless: bool = False):
     log.info(f"Leads existentes: {len(existing)} (se saltarán duplicados)")
 
     log.info(f"Iniciando scraper para {len(targets)} ciudades: {', '.join(targets)}")
-    log.info(f"Filtros: ≥ {MIN_RATING}★, > {MIN_REVIEWS} reseñas, web obligatoria")
+    web_label = {"required": "solo con web", "none": "solo sin web", "any": "todas"}.get(require_website, require_website)
+    log.info(f"Filtros: ≥ {min_rating}★, > {min_reviews} reseñas, web: {web_label}")
     log.info(f"Modo: {'headless' if headless else 'visible (verás el navegador)'}")
 
     new_leads = []
@@ -424,7 +452,7 @@ def run(cities: list | None = None, headless: bool = False):
 
         for city in targets:
             try:
-                city_leads = scrape_city(page, city)
+                city_leads = scrape_city(page, city, search_query, min_rating, min_reviews, require_website, max_scrolls)
                 # Filtrar los que ya existen
                 for lead in city_leads:
                     if lead.dedup_key not in existing_keys:

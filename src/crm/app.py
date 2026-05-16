@@ -25,7 +25,10 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from src.crm.db import (
     init_db, import_from_json, import_leads, get_leads_by_stage, get_all_leads,
-    update_lead_stage, update_lead_notes, get_stats, clear_all_leads, PIPELINE_STAGES,
+    update_lead_stage, update_lead_notes, get_stats, clear_all_leads,
+    save_scrap_profile, get_scrap_profiles, get_scrap_profile,
+    update_scrap_profile, delete_scrap_profile,
+    PIPELINE_STAGES,
 )
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
@@ -124,7 +127,9 @@ with st.sidebar:
 # VISTA PRINCIPAL — Tabs
 # ======================================================
 
-tab_kanban, tab_tabla, tab_detalle = st.tabs(["📋 Kanban", "📊 Tabla", "🔍 Detalle"])
+tab_kanban, tab_tabla, tab_detalle, tab_scrap = st.tabs(
+    ["📋 Kanban", "📊 Tabla", "🔍 Detalle", "⚙️ Scrap"]
+)
 
 # ======================================================
 # TAB 1 — KANBAN
@@ -307,3 +312,128 @@ with tab_detalle:
                 if notas != (lead["notas"] or ""):
                     update_lead_notes(lead["id"], notas)
                     st.success("Notas guardadas")
+
+
+# ======================================================
+# TAB 4 — PERSONALIZADOR DE SCRAP
+# ======================================================
+
+_CITIES_OPTIONS = [
+    "Madrid", "Barcelona", "Valencia", "Sevilla", "Málaga",
+    "Bilbao", "Zaragoza", "Murcia", "Palma de Mallorca",
+    "Las Palmas de Gran Canaria",
+]
+
+_WEB_OPTIONS = {
+    "Solo con web (vender software)": "required",
+    "Solo sin web (vender landing page)": "none",
+    "Todos (sin filtro)": "any",
+}
+_WEB_LABELS = {v: k for k, v in _WEB_OPTIONS.items()}
+
+with tab_scrap:
+    st.subheader("⚙️ Perfiles de Búsqueda")
+    st.caption("Configura los parámetros del scraper y guárdalos como perfiles reutilizables.")
+
+    profiles = get_scrap_profiles()
+    edit_id = st.session_state.get("scrap_edit_id")
+
+    # ── Perfiles guardados ──────────────────────────────
+    if profiles:
+        st.markdown("### Perfiles guardados")
+        for p in profiles:
+            ciudades_str = ", ".join(p["ciudades"]) if p["ciudades"] else "todas"
+            web_label = _WEB_LABELS.get(p["require_website"], p["require_website"])
+            with st.expander(f"**{p['nombre']}** — {ciudades_str}"):
+                col_a, col_b = st.columns(2)
+                col_a.write(f"🔍 Query: `{p['search_query']}`")
+                col_a.write(f"⭐ Min puntuación: **{p['min_rating']}**")
+                col_a.write(f"💬 Min reseñas: **{p['min_reviews']}**")
+                col_b.write(f"🌐 Web: **{web_label}**")
+                col_b.write(f"📜 Max scrolls: **{p['max_scrolls']}**")
+
+                btn_col1, btn_col2 = st.columns(2)
+                if btn_col1.button("✏️ Editar", key=f"edit_{p['id']}"):
+                    st.session_state["scrap_edit_id"] = p["id"]
+                    st.rerun()
+                if btn_col2.button("🗑️ Eliminar", key=f"del_{p['id']}"):
+                    delete_scrap_profile(p["id"])
+                    if st.session_state.get("scrap_edit_id") == p["id"]:
+                        st.session_state.pop("scrap_edit_id", None)
+                    st.rerun()
+    else:
+        st.info("No hay perfiles guardados aún. Crea uno abajo.")
+
+    st.divider()
+
+    # ── Formulario crear / editar ───────────────────────
+    editing = get_scrap_profile(edit_id) if edit_id else None
+    form_title = f"✏️ Editando: {editing['nombre']}" if editing else "➕ Nuevo perfil"
+    st.markdown(f"### {form_title}")
+
+    with st.form("scrap_profile_form", clear_on_submit=False):
+        f_nombre = st.text_input(
+            "Nombre del perfil",
+            value=editing["nombre"] if editing else "",
+            placeholder="Ej: Clínicas premium con web",
+        )
+        f_query = st.text_input(
+            "Query de búsqueda  (usa {city} como placeholder)",
+            value=editing["search_query"] if editing else "Clínica de psicología en {city}",
+            help="Se reemplaza {city} por cada ciudad seleccionada.",
+        )
+        f_ciudades = st.multiselect(
+            "Ciudades",
+            options=_CITIES_OPTIONS,
+            default=editing["ciudades"] if editing else _CITIES_OPTIONS[:4],
+            help="Vacío = usa todas las ciudades del config.py",
+        )
+
+        col1, col2 = st.columns(2)
+        f_rating = col1.slider(
+            "Puntuación mínima (★)",
+            min_value=0.0, max_value=5.0, step=0.1,
+            value=float(editing["min_rating"]) if editing else 4.0,
+        )
+        f_reviews = col2.slider(
+            "Reseñas mínimas",
+            min_value=0, max_value=500, step=5,
+            value=int(editing["min_reviews"]) if editing else 20,
+        )
+
+        col3, col4 = st.columns(2)
+        web_default = _WEB_LABELS.get(editing["require_website"], list(_WEB_OPTIONS.keys())[0]) if editing else list(_WEB_OPTIONS.keys())[0]
+        f_web_label = col3.selectbox("Filtro de sitio web", list(_WEB_OPTIONS.keys()), index=list(_WEB_OPTIONS.keys()).index(web_default))
+        f_scrolls = col4.slider(
+            "Max scrolls",
+            min_value=5, max_value=50, step=5,
+            value=int(editing["max_scrolls"]) if editing else 20,
+        )
+
+        submitted = st.form_submit_button("💾 Guardar perfil", type="primary", use_container_width=True)
+        if submitted:
+            if not f_nombre.strip():
+                st.error("El nombre del perfil no puede estar vacío.")
+            elif "{city}" not in f_query:
+                st.error("La query debe contener {city}.")
+            else:
+                f_require_web = _WEB_OPTIONS[f_web_label]
+                if editing:
+                    update_scrap_profile(
+                        editing["id"], f_nombre.strip(), f_query.strip(),
+                        f_ciudades, f_reviews, f_rating, f_require_web, f_scrolls,
+                    )
+                    st.session_state.pop("scrap_edit_id", None)
+                    st.success("✅ Perfil actualizado")
+                else:
+                    save_scrap_profile(
+                        f_nombre.strip(), f_query.strip(),
+                        f_ciudades, f_reviews, f_rating, f_require_web, f_scrolls,
+                    )
+                    st.success("✅ Perfil guardado")
+                st.rerun()
+
+    if editing:
+        if st.button("✖ Cancelar edición", use_container_width=True):
+            st.session_state.pop("scrap_edit_id", None)
+            st.rerun()

@@ -9,6 +9,7 @@
 **Descripción**: Botón que resetea la BD — borra todos los leads y deja el CRM como nuevo.
 
 **Implementación**:
+
 - Botón "🗑️ Vaciar todos los leads" en sidebar o tab de gestión
 - Doble confirmación (checkbox "Estoy seguro" + botón) para evitar borrados accidentales
 - Ejecuta `DELETE FROM leads`
@@ -23,6 +24,7 @@
 **Descripción**: Formulario en el CRM para configurar los parámetros del scraper antes de lanzarlo. Permite crear "perfiles de búsqueda" distintos según el objetivo comercial.
 
 **Parámetros configurables**:
+
 - Ciudades (multiselect)
 - Query de búsqueda (texto libre, ej. "Clínica de psicología en {city}", "Psicólogo en {city}")
 - Min reseñas (slider, 0-100)
@@ -32,11 +34,13 @@
 - Delays (anti-bloqueo)
 
 **Casos de uso**:
+
 - Scrap estándar: clínicas con web, >4★, >20 reseñas → para vender PsycoERP
 - Scrap sin web: clínicas SIN sitio web → para vender landing pages
 - Scrap amplio: bajar filtros para captar más leads de menor calidad
 
 **Implementación**:
+
 - Nuevo tab o modal con formulario de parámetros
 - Guardar perfiles en BD (nueva tabla `scrap_profiles`)
 - Al lanzar pipeline (cuando implementemos GitHub Actions), usa el perfil seleccionado
@@ -55,18 +59,21 @@
 **Opciones**:
 
 ### Opción A: `streamlit-elements` (recomendada)
+
 - Componente de terceros que permite usar Material UI dentro de Streamlit
 - Soporta dashboards con drag & drop real
 - Pros: funciona bien, look profesional
 - Contras: dependencia externa, API diferente al resto del CRM
 
 ### Opción B: HTML/JS custom con `st.components.v1.html`
+
 - Inyectar un Kanban en JavaScript puro (ej. con SortableJS)
 - Comunicación bidireccional con Streamlit via `Streamlit.setComponentValue()`
 - Pros: control total, sin dependencias
 - Contras: mucho más código, más difícil de mantener
 
 ### Opción C: Mejorar UX sin drag & drop
+
 - En lugar de drag & drop, poner botones rápidos de acción en cada card:
   `→ Contactado` `→ Demo` `→ Descartado`
 - Un solo click para mover de etapa (sin abrir expander)
@@ -84,6 +91,7 @@
 **Descripción**: Registro de cada ejecución de pipeline con sus resultados y los JSONs generados.
 
 **Implementación**:
+
 - Nueva tabla `pipeline_runs`:
   ```sql
   id INTEGER PRIMARY KEY,
@@ -109,13 +117,13 @@
 
 ## Orden de implementación sugerido
 
-| Prioridad | Feature | Esfuerzo |
-|-----------|---------|----------|
-| 1 | Vaciar leads | 15 min |
-| 2 | Personalizador de scrap | 1-2h |
-| 3 | Historial de pipelines | 1-2h |
-| 4 | Kanban mejorado (botones rápidos) | 30 min |
-| 5 | Kanban drag & drop real | 3-4h |
+| Prioridad | Feature                           | Esfuerzo |
+| --------- | --------------------------------- | -------- |
+| 1         | Vaciar leads                      | 15 min   |
+| 2         | Personalizador de scrap           | 1-2h     |
+| 3         | Historial de pipelines            | 1-2h     |
+| 4         | Kanban mejorado (botones rápidos) | 30 min   |
+| 5         | Kanban drag & drop real           | 3-4h     |
 
 ---
 

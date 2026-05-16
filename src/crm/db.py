@@ -46,7 +46,7 @@ def get_conn():
 
 
 def init_db():
-    """Crea la tabla de leads si no existe."""
+    """Crea las tablas necesarias si no existen."""
     conn = get_conn()
     conn.execute("""
         CREATE TABLE IF NOT EXISTS leads (
@@ -66,6 +66,19 @@ def init_db():
             notas       TEXT DEFAULT '',
             created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS scrap_profiles (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre          TEXT NOT NULL,
+            search_query    TEXT DEFAULT 'Clínica de psicología en {city}',
+            ciudades        TEXT DEFAULT '[]',
+            min_reviews     INTEGER DEFAULT 20,
+            min_rating      REAL DEFAULT 4.0,
+            require_website TEXT DEFAULT 'required',
+            max_scrolls     INTEGER DEFAULT 20,
+            created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
     conn.commit()
@@ -211,3 +224,92 @@ def get_stats() -> dict:
         "con_director": with_director,
         "por_etapa": by_stage,
     }
+
+
+# ======================================================
+# SCRAP PROFILES
+# ======================================================
+
+def save_scrap_profile(
+    nombre: str,
+    search_query: str,
+    ciudades: list,
+    min_reviews: int,
+    min_rating: float,
+    require_website: str,
+    max_scrolls: int,
+) -> int:
+    """Guarda un perfil de scraping. Retorna el id creado."""
+    conn = get_conn()
+    conn.execute("""
+        INSERT INTO scrap_profiles
+            (nombre, search_query, ciudades, min_reviews, min_rating, require_website, max_scrolls)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (nombre, search_query, json.dumps(ciudades, ensure_ascii=False),
+          min_reviews, min_rating, require_website, max_scrolls))
+    conn.commit()
+    # Obtener el id del último insertado
+    row = conn.execute("SELECT id FROM scrap_profiles ORDER BY id DESC LIMIT 1").fetchone()
+    conn.close()
+    return row[0] if row else -1
+
+
+def get_scrap_profiles() -> list[dict]:
+    """Retorna todos los perfiles guardados."""
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT * FROM scrap_profiles ORDER BY created_at DESC"
+    ).fetchall()
+    conn.close()
+    profiles = []
+    for r in rows:
+        p = dict(r)
+        p["ciudades"] = json.loads(p["ciudades"]) if p["ciudades"] else []
+        profiles.append(p)
+    return profiles
+
+
+def get_scrap_profile(profile_id: int) -> dict | None:
+    """Retorna un perfil por id."""
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT * FROM scrap_profiles WHERE id = ?", (profile_id,)
+    ).fetchone()
+    conn.close()
+    if not row:
+        return None
+    p = dict(row)
+    p["ciudades"] = json.loads(p["ciudades"]) if p["ciudades"] else []
+    return p
+
+
+def update_scrap_profile(
+    profile_id: int,
+    nombre: str,
+    search_query: str,
+    ciudades: list,
+    min_reviews: int,
+    min_rating: float,
+    require_website: str,
+    max_scrolls: int,
+):
+    """Actualiza un perfil existente."""
+    conn = get_conn()
+    conn.execute("""
+        UPDATE scrap_profiles
+        SET nombre=?, search_query=?, ciudades=?, min_reviews=?,
+            min_rating=?, require_website=?, max_scrolls=?
+        WHERE id=?
+    """, (nombre, search_query, json.dumps(ciudades, ensure_ascii=False),
+          min_reviews, min_rating, require_website, max_scrolls, profile_id))
+    conn.commit()
+    conn.close()
+
+
+def delete_scrap_profile(profile_id: int):
+    """Elimina un perfil."""
+    conn = get_conn()
+    conn.execute("DELETE FROM scrap_profiles WHERE id = ?", (profile_id,))
+    conn.commit()
+    conn.close()
+
