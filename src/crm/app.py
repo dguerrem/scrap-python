@@ -25,7 +25,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from src.crm.db import (
     init_db, import_from_json, import_leads, get_leads_by_stage, get_all_leads,
-    update_lead_stage, update_lead_notes, get_stats, PIPELINE_STAGES,
+    update_lead_stage, update_lead_notes, get_stats, clear_all_leads, PIPELINE_STAGES,
 )
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
@@ -101,6 +101,20 @@ with st.sidebar:
     col3, col4 = st.columns(2)
     col3.metric("Con director", stats["con_director"])
     col4.metric("Contactados", stats["por_etapa"].get("Contactado", 0))
+
+    st.divider()
+
+    # ── Zona peligrosa ──
+    st.subheader("⚠️ Gestión")
+    confirm_clear = st.checkbox("Confirmar vaciado de leads")
+    if st.button(
+        "🗑️ Vaciar todos los leads",
+        disabled=not confirm_clear,
+        use_container_width=True,
+    ):
+        deleted = clear_all_leads()
+        st.success(f"✅ {deleted} leads eliminados")
+        st.rerun()
 
     st.divider()
     st.caption("PsycoERP · €2.500 pago único")

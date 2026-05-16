@@ -154,6 +154,16 @@ def get_all_leads() -> list:
     return [dict(r) for r in rows]
 
 
+def clear_all_leads() -> int:
+    """Borra todos los leads. Retorna el número de filas eliminadas."""
+    conn = get_conn()
+    count = conn.execute("SELECT COUNT(*) FROM leads").fetchone()[0]
+    conn.execute("DELETE FROM leads")
+    conn.commit()
+    conn.close()
+    return count
+
+
 def update_lead_stage(lead_id: int, new_stage: str):
     """Mueve un lead a otra etapa del pipeline."""
     conn = get_conn()
