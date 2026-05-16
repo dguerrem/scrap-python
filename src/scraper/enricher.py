@@ -73,7 +73,7 @@ def _extract_emails(html: str, domain: str) -> dict:
     """
     raw_emails = set(EMAIL_REGEX.findall(html))
 
-    # Filtrar basura (imágenes, archivos, etc.)
+    # Filtrar basura (imágenes, archivos, placeholders, etc.)
     filtered = []
     for email in raw_emails:
         lower = email.lower()
@@ -82,6 +82,17 @@ def _extract_emails(html: str, domain: str) -> dict:
             continue
         # Descartar emails con dominios de tracking/analytics
         if any(d in lower for d in ["sentry.io", "googleapis", "cloudflare", "wixpress"]):
+            continue
+        # Descartar emails placeholder / ejemplo
+        if any(p in lower for p in ["usuario@dominio", "example@", "ejemplo@",
+                                      "nombre@dominio", "nombre@email",
+                                      "tu@tu", "your@",
+                                      "email@email", "test@test", "user@user",
+                                      "xxxxx"]):
+            continue
+        # Limpiar espacios URL-encoded (%20) al principio
+        email = email.lstrip("%20 ")
+        if not email or "@" not in email:
             continue
         filtered.append(email)
 
@@ -150,13 +161,22 @@ NIF_REGEX = re.compile(r"\b[A-Z]?\d{7,8}[A-Z]?\b")
 
 def _clean_name(raw: str) -> str:
     """Limpia el nombre extraído del aviso legal."""
-    # Cortar en delimitadores que indican fin del nombre
-    for sep in ["CIF:", "CIF :", "NIF:", "NIF :", "DNI:", "DNI :",
-                "Domicilio", "domicilio", "Dirección", "Actividad",
-                "actividad", "inscrita", "Inscrita"]:
-        idx = raw.find(sep)
+    # Cortar en delimitadores que indican fin del nombre (case-insensitive)
+    cut_markers = [
+        "cif:", "cif :", "cif ", "cif/", "cif b", "cif a",
+        "nif:", "nif :", "nif ", "nif/",
+        "dni:", "dni :", "dni ", "dni/",
+        "domicilio", "dirección", "direccion",
+        "actividad", "inscrita", "finalidad", "gestión", "gestion",
+        "ha contratado", "de los contenidos", "y de todos", "en adelante",
+        "nombre comercial", "http://", "https://",
+    ]
+    raw_lower = raw.lower()
+    for sep in cut_markers:
+        idx = raw_lower.find(sep)
         if idx > 0:
             raw = raw[:idx]
+            raw_lower = raw.lower()
     # Quitar NIF/CIF si está pegado al nombre
     name = NIF_REGEX.sub("", raw)
     # Quitar caracteres extra
@@ -167,6 +187,18 @@ def _clean_name(raw: str) -> str:
     name = re.sub(r"\(.*?\)", "", name)
     # Quitar prefijos sueltos de contexto HTML ("¿Quiénes somos?", etc.)
     name = re.sub(r"^[¿?¡!].*?[.?!]\s*", "", name)
+    # Rechazar si es una URL (falso positivo)
+    if name.startswith(("http://", "https://", "www.")):
+        return ""
+    # Rechazar si parece una frase (no un nombre propio/sociedad)
+    words = name.split()
+    if len(words) > 6:
+        return ""
+    # Rechazar placeholders y basura evidente
+    name_lower = name.lower()
+    if any(x in name_lower for x in ["xxx", "ver datos", "encabezamiento",
+                                       "rellenar", "placeholder"]):
+        return ""
     # Limitar longitud (si es demasiado largo, probablemente pillamos basura)
     name = name.strip()
     if len(name) > 80:
@@ -194,8 +226,9 @@ def _extract_director_from_text(text: str) -> tuple:
             if not name or len(name) < 3:
                 continue
 
-            # Heurística: si contiene "S.L.", "S. L.", "S.A.", "S.L.P." → es sociedad
-            if re.search(r"S\.?\s*L\.?\s*P?\.?|S\.?\s*A\.?|S\.?\s*C\.?|SOCIEDAD", name, re.IGNORECASE):
+            # Heurística: si contiene "S.L.", "S. L.", "S.A.", "SLP" → es sociedad
+            # Requiere punto después de S para no matchear "Saavedra", "Sanchez"
+            if re.search(r"\bS\.\s*L\.?\s*P?\.?|\bS\.\s*A\.?|\bS\.\s*C\.?|\bSLP\b|\bSLL\b|\bSOCIEDAD\b", name):
                 sociedad = name
             else:
                 director = name

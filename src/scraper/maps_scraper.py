@@ -334,6 +334,32 @@ def deduplicate(leads: list) -> list:
     return unique
 
 
+def load_existing_leads() -> list:
+    """Carga leads existentes de leads_raw.json para evitar duplicados."""
+    json_path = DATA_DIR / "leads_raw.json"
+    if not json_path.exists():
+        return []
+    try:
+        with open(json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        leads = []
+        for d in data:
+            leads.append(Lead(
+                nombre=d["nombre"],
+                ciudad=d["ciudad"],
+                direccion=d.get("direccion", ""),
+                telefono=d.get("telefono", ""),
+                url=d.get("url", ""),
+                puntuacion=d.get("puntuacion", 0),
+                resenas=d.get("resenas", 0),
+            ))
+        log.info(f"Leads existentes cargados: {len(leads)}")
+        return leads
+    except Exception as e:
+        log.warning(f"No se pudieron cargar leads existentes: {e}")
+        return []
+
+
 def save_leads(leads: list):
     """Guarda los leads en JSON y CSV dentro de data/."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -363,6 +389,7 @@ def save_leads(leads: list):
 def run(cities: list | None = None, headless: bool = False):
     """
     Ejecuta el scraper completo.
+    Acumula leads existentes de leads_raw.json para no repetir.
 
     Args:
         cities:   Lista de ciudades (None = todas las de config.py)
@@ -370,11 +397,16 @@ def run(cities: list | None = None, headless: bool = False):
     """
     targets = cities or CITIES
 
+    # Cargar leads existentes para no repetir
+    existing = load_existing_leads()
+    existing_keys = {lead.dedup_key for lead in existing}
+    log.info(f"Leads existentes: {len(existing)} (se saltarán duplicados)")
+
     log.info(f"Iniciando scraper para {len(targets)} ciudades: {', '.join(targets)}")
     log.info(f"Filtros: ≥ {MIN_RATING}★, > {MIN_REVIEWS} reseñas, web obligatoria")
     log.info(f"Modo: {'headless' if headless else 'visible (verás el navegador)'}")
 
-    all_leads = []
+    new_leads = []
 
     with sync_playwright() as p:
         # Lanzar navegador Chromium
@@ -393,7 +425,13 @@ def run(cities: list | None = None, headless: bool = False):
         for city in targets:
             try:
                 city_leads = scrape_city(page, city)
-                all_leads.extend(city_leads)
+                # Filtrar los que ya existen
+                for lead in city_leads:
+                    if lead.dedup_key not in existing_keys:
+                        new_leads.append(lead)
+                        existing_keys.add(lead.dedup_key)
+                    else:
+                        log.info(f"  ⊘ {lead.nombre} — ya existe, saltando")
             except Exception as e:
                 log.error(f"Error en {city}: {e}")
             _sleep(DELAY_BETWEEN_SEARCHES)
@@ -401,14 +439,17 @@ def run(cities: list | None = None, headless: bool = False):
         context.close()
         browser.close()
 
-    # Deduplicar y guardar
-    all_leads = deduplicate(all_leads)
+    # Combinar existentes + nuevos y guardar
+    all_leads = existing + deduplicate(new_leads)
     save_leads(all_leads)
 
     # Resumen final
     log.info(f"\n{'=' * 50}")
-    log.info(f"RESUMEN FINAL: {len(all_leads)} leads cualificados")
+    log.info(f"RESUMEN FINAL")
     log.info(f"{'=' * 50}")
+    log.info(f"Leads previos:     {len(existing)}")
+    log.info(f"Leads nuevos:      {len(new_leads)}")
+    log.info(f"Total acumulado:   {len(all_leads)}")
     for city in targets:
         n = sum(1 for lead in all_leads if lead.ciudad == city)
         if n:
