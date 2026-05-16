@@ -29,6 +29,12 @@ def main():
         action="store_true",
         help="Ejecutar sin mostrar el navegador (modo invisible).",
     )
+    parser.add_argument(
+        "--profile",
+        type=str,
+        default=None,
+        help="Ruta a un fichero JSON con el perfil de scrap (parámetros personalizados).",
+    )
     args = parser.parse_args()
 
     # Configurar logging (los mensajes del scraper se muestran en consola)
@@ -43,7 +49,13 @@ def main():
     if args.cities:
         cities = [c.strip() for c in args.cities.split(",")]
 
-    run(cities=cities, headless=args.headless)
+    # Cargar perfil si se especificó
+    profile = None
+    if args.profile:
+        from pathlib import Path
+        profile = __import__("json").loads(Path(args.profile).read_text(encoding="utf-8"))
+
+    run(cities=cities, headless=args.headless, profile=profile)
 
 
 if __name__ == "__main__":

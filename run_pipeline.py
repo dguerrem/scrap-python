@@ -45,9 +45,22 @@ if __name__ == "__main__":
         action="store_true",
         help="Saltar fase de enrichment (solo scraping)",
     )
+    parser.add_argument(
+        "--profile",
+        type=str,
+        default=None,
+        help="Ruta a fichero JSON con perfil de scrap personalizado.",
+    )
     args = parser.parse_args()
 
     cities = [c.strip() for c in args.cities.split(",")] if args.cities else None
+
+    # Cargar perfil si se especificó
+    profile = None
+    if args.profile:
+        from pathlib import Path as _P
+        profile = __import__("json").loads(_P(args.profile).read_text(encoding="utf-8"))
+
     start = time.time()
 
     # ─── FASE 1: Scraping de Google Maps ───
@@ -56,7 +69,7 @@ if __name__ == "__main__":
         log.info("FASE 1 — SCRAPING DE GOOGLE MAPS")
         log.info("=" * 60)
         from src.scraper.maps_scraper import run as run_scraper
-        run_scraper(cities=cities, headless=args.headless)
+        run_scraper(cities=cities, headless=args.headless, profile=profile)
     else:
         log.info("Scraping saltado (--skip-scraping)")
 

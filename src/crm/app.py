@@ -30,6 +30,7 @@ from src.crm.db import (
     update_scrap_profile, delete_scrap_profile,
     PIPELINE_STAGES,
 )
+from src.crm import pipeline_runner
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 
@@ -331,14 +332,81 @@ _WEB_OPTIONS = {
 }
 _WEB_LABELS = {v: k for k, v in _WEB_OPTIONS.items()}
 
+_MODE_OPTIONS = {
+    "🗺️ Solo Scraper (Google Maps)": "scraper",
+    "🔍 Solo Enricher (emails + director)": "enricher",
+    "🚀 Pipeline completa (scraper + enricher)": "pipeline",
+}
+
 with tab_scrap:
     st.subheader("⚙️ Perfiles de Búsqueda")
-    st.caption("Configura los parámetros del scraper y guárdalos como perfiles reutilizables.")
 
+    # ── Estado de ejecución activa ──────────────────────
+    run_status = pipeline_runner.get_status()
+    is_running = bool(run_status and run_status.get("status") == "running")
+
+    if run_status:
+        status_val = run_status.get("status", "")
+        profile_nombre = run_status.get("profile_nombre", "")
+        started = run_status.get("started", "")
+
+        if is_running:
+            st.info(f"⏳ **Pipeline en ejecución** — perfil: _{profile_nombre}_ · iniciada: {started}")
+            col_log, col_actions = st.columns([3, 1])
+            with col_log:
+                log_text = pipeline_runner.get_log_tail(40)
+                st.code(log_text or "(esperando salida...)", language=None)
+            with col_actions:
+                if st.button("🔄 Actualizar", use_container_width=True):
+                    st.rerun()
+                if st.button("⛔ Cancelar", use_container_width=True, type="secondary"):
+                    pipeline_runner.kill_current()
+                    st.warning("Pipeline cancelada.")
+                    st.rerun()
+        else:
+            icon = "✅" if status_val == "completed" else "❌"
+            label = "completada" if status_val == "completed" else status_val
+            finished = run_status.get("finished", "")
+            st.success(f"{icon} Pipeline **{label}** — perfil: _{profile_nombre}_ · {finished}")
+
+            # Mostrar últimas líneas del log
+            with st.expander("Ver log"):
+                st.code(pipeline_runner.get_log_tail(60), language=None)
+
+            col_import, col_clear = st.columns(2)
+            if col_import.button("📥 Importar leads generados", use_container_width=True, type="primary"):
+                enriched_path = DATA_DIR / "leads_enriched.json"
+                raw_path = DATA_DIR / "leads_raw.json"
+                imported = 0
+                if enriched_path.exists():
+                    imported = import_from_json(enriched_path)
+                elif raw_path.exists():
+                    imported = import_from_json(raw_path)
+                if imported:
+                    st.success(f"✅ {imported} leads importados")
+                else:
+                    st.info("No hay leads nuevos para importar")
+                st.rerun()
+            if col_clear.button("🗑️ Limpiar estado", use_container_width=True):
+                pipeline_runner.clear_status()
+                st.rerun()
+
+        st.divider()
+
+    # ── En cloud: no se puede ejecutar ──────────────────
+    if pipeline_runner.is_cloud():
+        st.warning(
+            "⚠️ **Modo cloud activo.** La pipeline requiere Playwright y no puede "
+            "ejecutarse en Streamlit Cloud. Para lanzar desde el CRM en producción, "
+            "implementa la integración con GitHub Actions (ver `context/github-actions-plan.md`)."
+        )
+
+    # ── Perfiles guardados ──────────────────────────────
     profiles = get_scrap_profiles()
     edit_id = st.session_state.get("scrap_edit_id")
 
-    # ── Perfiles guardados ──────────────────────────────
+    st.caption("Configura los parámetros del scraper y guárdalos como perfiles reutilizables.")
+
     if profiles:
         st.markdown("### Perfiles guardados")
         for p in profiles:
@@ -351,6 +419,34 @@ with tab_scrap:
                 col_a.write(f"💬 Min reseñas: **{p['min_reviews']}**")
                 col_b.write(f"🌐 Web: **{web_label}**")
                 col_b.write(f"📜 Max scrolls: **{p['max_scrolls']}**")
+
+                st.divider()
+
+                # Lanzar pipeline con este perfil
+                if not pipeline_runner.is_cloud():
+                    launch_col1, launch_col2 = st.columns([2, 1])
+                    mode_label = launch_col1.selectbox(
+                        "Modo de ejecución",
+                        list(_MODE_OPTIONS.keys()),
+                        key=f"mode_{p['id']}",
+                    )
+                    if launch_col2.button(
+                        "🚀 Lanzar",
+                        key=f"launch_{p['id']}",
+                        disabled=is_running,
+                        use_container_width=True,
+                        type="primary",
+                    ):
+                        try:
+                            mode = _MODE_OPTIONS[mode_label]
+                            pipeline_runner.launch(dict(p), mode)
+                            st.success(f"Pipeline iniciada en background.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error al lanzar: {e}")
+
+                    if is_running:
+                        st.caption("⏳ Hay una pipeline en ejecución. Espera a que termine.")
 
                 btn_col1, btn_col2 = st.columns(2)
                 if btn_col1.button("✏️ Editar", key=f"edit_{p['id']}"):
