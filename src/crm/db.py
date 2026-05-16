@@ -31,10 +31,10 @@ def _is_cloud() -> bool:
 def get_conn():
     """Abre conexión a Turso (cloud) o SQLite local (desarrollo)."""
     if _is_cloud():
-        import libsql_experimental as libsql
-        conn = libsql.connect(
+        from src.crm.turso_http import TursoConnection
+        conn = TursoConnection(
             os.environ["TURSO_DATABASE_URL"],
-            auth_token=os.environ.get("TURSO_AUTH_TOKEN", ""),
+            os.environ.get("TURSO_AUTH_TOKEN", ""),
         )
     else:
         DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -80,41 +80,49 @@ def import_leads(leads: list[dict]) -> int:
     """
     conn = get_conn()
     init_db()
-    imported = 0
 
-    for lead in leads:
-        existing = conn.execute(
-            "SELECT id FROM leads WHERE nombre = ? AND ciudad = ?",
-            (lead["nombre"], lead["ciudad"]),
-        ).fetchone()
+    # Pre-fetch existing (nombre, ciudad) en una sola query
+    existing = conn.execute("SELECT nombre, ciudad FROM leads").fetchall()
+    existing_keys = {(r["nombre"], r["ciudad"]) for r in existing}
 
-        if existing:
-            continue
+    new_leads = [
+        l for l in leads
+        if (l["nombre"], l["ciudad"]) not in existing_keys
+    ]
 
-        conn.execute("""
-            INSERT INTO leads (nombre, ciudad, direccion, telefono, url,
-                             puntuacion, resenas, director, email_directo,
-                             email_generico, sociedad, etapa)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            lead.get("nombre", ""),
-            lead.get("ciudad", ""),
-            lead.get("direccion", "").strip(),
-            lead.get("telefono", "").strip(),
-            lead.get("url", ""),
-            lead.get("puntuacion", 0),
-            lead.get("resenas", 0),
-            lead.get("director", ""),
-            lead.get("email_directo", ""),
-            lead.get("email_generico", ""),
-            lead.get("sociedad", ""),
+    if not new_leads:
+        conn.close()
+        return 0
+
+    sql = """
+        INSERT INTO leads (nombre, ciudad, direccion, telefono, url,
+                         puntuacion, resenas, director, email_directo,
+                         email_generico, sociedad, etapa)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """
+
+    params_list = [
+        (
+            l.get("nombre", ""),
+            l.get("ciudad", ""),
+            l.get("direccion", "").strip(),
+            l.get("telefono", "").strip(),
+            l.get("url", ""),
+            l.get("puntuacion", 0),
+            l.get("resenas", 0),
+            l.get("director", ""),
+            l.get("email_directo", ""),
+            l.get("email_generico", ""),
+            l.get("sociedad", ""),
             "Nuevo",
-        ))
-        imported += 1
+        )
+        for l in new_leads
+    ]
 
+    conn.executemany(sql, params_list)
     conn.commit()
     conn.close()
-    return imported
+    return len(new_leads)
 
 
 def import_from_json(json_path: str | Path) -> int:
