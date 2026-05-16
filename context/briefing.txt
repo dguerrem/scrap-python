@@ -1,0 +1,55 @@
+BRIEFING Y SCRAP
+BRIEFING DE PROYECTO: PsycoERP y Sistema de Prospección B2B
+1.⁠ ⁠Contexto del Producto: PsycoERP
+Soy un programador freelance que ha desarrollado PsycoERP, un software de gestión (ERP) nicho diseñado exclusivamente para psicólogos y clínicas de salud mental.
+Módulos principales del ERP:
+•⁠  ⁠Calendario y gestión de citas.
+•⁠  ⁠Gestión de llamadas y recordatorios automáticos (vía API tipo Twilio/360dialog).
+•⁠  ⁠Gestión de pacientes e historial clínico (altamente sensible, cumplimiento estricto LOPD/RGPD).
+•⁠  ⁠Gestión de sesiones.
+•⁠  ⁠Dashboard analítico con métricas de negocio y comisiones de terapeutas.
+•⁠  ⁠Módulo de facturación (opcional/configurable).
+2.⁠ ⁠Modelo de Negocio y Pricing
+Rompo con el modelo estándar de SaaS (suscripción mensual) para ofrecer un modelo High-Ticket de pago único y desarrollo a medida.
+•⁠  ⁠Precio: 2.500 € por licencia (pago único).
+•⁠  ⁠Propuesta de valor: "Pagas una vez y el software es 100% tuyo y adaptado a tus flujos de trabajo reales". Frente a los SaaS genéricos (que cuestan ~3.000€ a 5 años y nunca son propiedad del cliente), PsycoERP se amortiza en menos de 10 meses.
+•⁠  ⁠Servicio incluido: Soporte 24/7 y mantenimiento durante el primer año. Transición "Guante Blanco" (yo me encargo de migrar todos sus datos históricos a coste cero y formar a su equipo).
+•⁠  ⁠Monetización post-año 1: Evolutivos, nuevos módulos o personalizaciones extra se presupuestan aparte.
+•⁠  ⁠Gestión de Costes de Infraestructura: Para no asumir los costes recurrentes de servidor y APIs de recordatorios, el ERP se instala en un VPS a nombre del cliente (ej. 10€/mes) y se usan las cuentas de API del cliente. Pagan exactamente lo que consumen a precio de coste.
+3.⁠ ⁠Cliente Ideal (ICP - Ideal Customer Profile)
+•⁠  ⁠Target: Clínicas de psicología medianas (gabinetes de 3 a 15 profesionales).
+•⁠  ⁠Motivación: Tienen flujos complejos de reparto de salas y comisiones. Están cansados de pagar suscripciones eternas a plataformas genéricas que no se adaptan a su forma de trabajar y donde sus datos están en servidores de terceros.
+•⁠  ⁠El "Gatekeeper": Tienen recepcionistas que filtran todo, por lo que la prospección debe evitar el teléfono a puerta fría y la bandeja de info@.
+4.⁠ ⁠Estrategia de Prospección y Ventas (Go-To-Market)
+El objetivo no es el volumen masivo, sino conseguir 3-5 clientes mensuales. El embudo actual se basa en un ataque quirúrgico mediante prospección (Outbound B2B):
+1.⁠ ⁠Extracción Local: Buscar clínicas medianas en Google Maps y escrapear sus datos.
+2.⁠ ⁠Enriquecimiento: Obtener el nombre del Director/Propietario y un email directo.
+3.⁠ ⁠Contacto Asíncrono: Envío de un "Video-Pitch" genérico (vía Loom) de 2 minutos dirigido al director, mostrando las pantallas clave del ERP (dashboard, calendario, facturación) y explicando el ahorro financiero frente al SaaS.
+4.⁠ ⁠Cierre: Llamada de descubrimiento de 15 minutos -> Demo centrada en su problema -> Cierre de 2.500€.
+5.⁠ ⁠REQUISITOS TÉCNICOS PARA EL SCRIPT (Para Opus)
+Necesito que me ayudes a programar la primera fase de la estrategia de ventas: Un pipeline de extracción y enriquecimiento de leads ("PsycoLead-Scraper"). El objetivo inmediato es conseguir una base de datos limpia de 40 clínicas altamente cualificadas.
+Stack Tecnológico Propuesto:
+•⁠  ⁠Lenguaje: Python.
+•⁠  ⁠Scraping Core: Playwright o Puppeteer (para sortear bloqueos de Google Maps).
+•⁠  ⁠Gestión de Datos: Salida en JSON/CSV, con vistas a integrarlo luego en una base de datos o UI sencilla (Streamlit, Supabase, Notion API o Airtable).
+Lógica de Ejecución (El flujo que debemos programar):
+Fase 1: Minería en Google Maps
+1.⁠ ⁠El script debe iterar búsquedas tipo "Clínica de psicología" a través de un listado de códigos postales o barrios de grandes ciudades de España (Madrid, Barcelona, Valencia, etc.).
+2.⁠ ⁠Filtros de Cualificación (Críticos):
+•⁠  ⁠Solo extraer si Número de Reseñas > 20 (indica volumen de pacientes).
+•⁠  ⁠Solo extraer si Puntuación >= 4.0.
+•⁠  ⁠Debe tener obligatoriamente página web (si no tienen URL, descartar el lead).
+3.⁠ ⁠Datos a guardar por clínica: Nombre del negocio, URL, Teléfono, Número de reseñas, Puntuación, Dirección.
+Fase 2: Enriquecimiento (La clave del éxito)
+El script debe coger cada URL extraída en la Fase 1, visitar la web de la clínica automáticamente y hacer lo siguiente:
+1.⁠ ⁠Extracción del Director (Aviso Legal): Escanear el HTML, específicamente buscando enlaces hacia "Aviso Legal", "Política de Privacidad" o "Condiciones". Buscar dentro de esas páginas palabras clave como Responsable, Titular del sitio web, DNI o NIF. El objetivo es aislar y guardar el nombre completo de la persona física o sociedad administradora.
+2.⁠ ⁠Extracción de Email (Regex): Buscar patrones de correo electrónico en el HTML completo. Regla importante: Identificar y separar correos genéricos (info@, contacto@, hola@) de correos posiblemente directos (nombre@, direccion@, gerencia@).
+3.⁠ ⁠(Opcional/A futuro): Integración con la API de Hunter.io u otra herramienta para cruzar el dominio y buscar correos corporativos asociados si la extracción web falla.
+Fase 3: Estructura del Pipeline (CRM Básico)
+Los datos extraídos deben prepararse para entrar en un formato Kanban con los siguientes estados:
+1.⁠ ⁠Scraped (Datos crudos de Maps).
+2.⁠ ⁠Enriched (Con nombre del director y email válido).
+3.⁠ ⁠Video Sent (Pitch enviado).
+4.⁠ ⁠Meeting (Reunión agendada).
+5.⁠ ⁠Closed (Ganado).
+Nota para la IA de Programación (Opus): No necesito una interfaz gráfica compleja ahora mismo. Quiero centrarme en que el script de scraping de Maps con Playwright y la parte de extracción del nombre del "Aviso Legal" sean extremadamente robustos y eviten los bloqueos. Empecemos por la arquitectura del script en Python.

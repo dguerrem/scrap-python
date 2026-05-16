@@ -9,6 +9,7 @@ Pipeline de extracción y enriquecimiento de leads B2B para la prospección de c
 Software de gestión (ERP) nicho diseñado exclusivamente para psicólogos y clínicas de salud mental, desarrollado bajo modelo **High-Ticket de pago único** (2.500 € por licencia).
 
 ### Módulos principales
+
 - Calendario y gestión de citas.
 - Gestión de llamadas y recordatorios automáticos (API tipo Twilio / 360dialog).
 - Gestión de pacientes e historial clínico (cumplimiento LOPD/RGPD).
@@ -17,6 +18,7 @@ Software de gestión (ERP) nicho diseñado exclusivamente para psicólogos y cl�
 - Módulo de facturación (opcional/configurable).
 
 ### Modelo de negocio
+
 - **Precio:** 2.500 € (pago único, sin suscripción).
 - **Propuesta de valor:** el software es 100 % del cliente y adaptado a sus flujos reales. Se amortiza en menos de 10 meses frente a SaaS genéricos (~3.000 € a 5 años).
 - **Servicio incluido:** soporte 24/7 y mantenimiento durante el primer año + migración de datos históricos y formación del equipo ("Guante Blanco") a coste cero.
@@ -46,11 +48,12 @@ Objetivo: **3-5 clientes mensuales** mediante prospección outbound quirúrgica.
 ## Descripción Técnica del Script
 
 ### Stack tecnológico
-| Componente | Tecnología |
-|---|---|
-| Lenguaje | Python |
-| Scraping core | Playwright |
-| Salida de datos | JSON / CSV |
+
+| Componente         | Tecnología                                 |
+| ------------------ | ------------------------------------------ |
+| Lenguaje           | Python                                     |
+| Scraping core      | Playwright                                 |
+| Salida de datos    | JSON / CSV                                 |
 | Integración futura | Streamlit, Supabase, Notion API o Airtable |
 
 ---
@@ -62,6 +65,7 @@ Objetivo: **3-5 clientes mensuales** mediante prospección outbound quirúrgica.
 Iterar búsquedas tipo `"Clínica de psicología"` sobre un listado de códigos postales / barrios de grandes ciudades (Madrid, Barcelona, Valencia…).
 
 **Filtros de cualificación (críticos):**
+
 - Número de reseñas **> 20**.
 - Puntuación **≥ 4.0**.
 - Debe tener página web (sin URL → descartar).
@@ -81,19 +85,19 @@ Por cada URL extraída en la Fase 1, el script visita la web de la clínica y:
    - **Genéricos:** `info@`, `contacto@`, `hola@`, etc.
    - **Directos:** `nombre@`, `direccion@`, `gerencia@`, etc.
 
-3. *(Opcional / futuro)* Integración con la API de **Hunter.io** para cruzar el dominio y buscar correos corporativos cuando la extracción web falla.
+3. _(Opcional / futuro)_ Integración con la API de **Hunter.io** para cruzar el dominio y buscar correos corporativos cuando la extracción web falla.
 
 ---
 
 ### Fase 3 — Pipeline CRM Básico (Kanban)
 
-| Estado | Descripción |
-|---|---|
-| `Scraped` | Datos crudos de Google Maps |
-| `Enriched` | Con nombre del director y email válido |
-| `Video Sent` | Pitch enviado |
-| `Meeting` | Reunión agendada |
-| `Closed` | Cliente ganado |
+| Estado       | Descripción                            |
+| ------------ | -------------------------------------- |
+| `Scraped`    | Datos crudos de Google Maps            |
+| `Enriched`   | Con nombre del director y email válido |
+| `Video Sent` | Pitch enviado                          |
+| `Meeting`    | Reunión agendada                       |
+| `Closed`     | Cliente ganado                         |
 
 ---
 
