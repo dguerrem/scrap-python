@@ -45,24 +45,55 @@ Objetivo: **3-5 clientes mensuales** mediante prospección outbound quirúrgica.
 
 ---
 
-## Descripción Técnica del Script
+## Stack Tecnológico
 
-### Stack tecnológico
-
-| Componente         | Tecnología                                 |
-| ------------------ | ------------------------------------------ |
-| Lenguaje           | Python                                     |
-| Scraping core      | Playwright                                 |
-| Salida de datos    | JSON / CSV                                 |
-| Integración futura | Streamlit, Supabase, Notion API o Airtable |
+| Componente    | Tecnología            |
+| ------------- | --------------------- |
+| Lenguaje      | Python 3.9+           |
+| Scraping core | Playwright (headless) |
+| CRM ligero    | Streamlit + SQLite    |
+| Salida datos  | JSON / CSV            |
 
 ---
 
-## Pipeline de Ejecución
+## Estructura del Proyecto
+
+```
+scrap-python/
+├── context/                  # Briefing del proyecto
+├── src/
+│   ├── scraper/
+│   │   ├── maps_scraper.py   # Fase 1: Scraping Google Maps
+│   │   ├── enricher.py       # Fase 2: Enriquecimiento webs
+│   │   └── config.py         # Configuración (ciudades, filtros, delays)
+│   ├── crm/
+│   │   └── app.py            # Fase 3: CRM Kanban (Streamlit)
+│   └── models/
+│       └── lead.py           # Modelo de datos del lead
+├── data/                     # Output: JSONs y CSVs generados
+├── requirements.txt
+├── .env.example
+├── .gitignore
+└── README.md
+```
+
+---
+
+## Plan de Desarrollo
+
+### Fase 0 — Setup del Entorno ✅
+
+- Crear **virtualenv** (`venv/`) dentro del proyecto.
+- Definir estructura de carpetas.
+- Crear `requirements.txt` con dependencias.
+- Instalar Playwright + navegadores Chromium.
+- Crear `.gitignore` (venv, data, **pycache**, .env).
+
+---
 
 ### Fase 1 — Minería en Google Maps
 
-Iterar búsquedas tipo `"Clínica de psicología"` sobre un listado de códigos postales / barrios de grandes ciudades (Madrid, Barcelona, Valencia…).
+Iterar búsquedas tipo `"Clínica de psicología"` sobre un listado de ciudades de España.
 
 **Filtros de cualificación (críticos):**
 
@@ -70,14 +101,34 @@ Iterar búsquedas tipo `"Clínica de psicología"` sobre un listado de códigos 
 - Puntuación **≥ 4.0**.
 - Debe tener página web (sin URL → descartar).
 
-**Datos guardados por clínica:**
-`nombre`, `url`, `teléfono`, `nº reseñas`, `puntuación`, `dirección`.
+**Datos guardados por clínica (columnas del CSV/JSON):**
+
+| Columna      | Descripción                                     |
+| ------------ | ----------------------------------------------- |
+| `nombre`     | Nombre del negocio                              |
+| `ciudad`     | Ciudad de la búsqueda (Madrid, Barcelona, etc.) |
+| `direccion`  | Dirección completa                              |
+| `telefono`   | Teléfono de contacto                            |
+| `url`        | Página web de la clínica                        |
+| `puntuacion` | Rating en Google Maps (≥ 4.0)                   |
+| `resenas`    | Número de reseñas (> 20)                        |
+
+**Tareas técnicas:**
+
+1. Configuración de ciudades/CP objetivo.
+2. Navegación Playwright (headless) + scroll infinito del panel de resultados.
+3. Extracción de datos por resultado.
+4. Anti-bloqueo: delays aleatorios, user-agent rotativo, timeouts.
+5. Deduplicación por nombre + dirección.
+6. Output a `data/leads_raw.json` y `data/leads_raw.csv`.
+
+**Test:** Ejecutar contra 2-3 ciudades → validar ≥ 15 leads limpios con columna `ciudad` correcta.
 
 ---
 
-### Fase 2 — Enriquecimiento
+### Fase 2 — Enriquecimiento de Leads
 
-Por cada URL extraída en la Fase 1, el script visita la web de la clínica y:
+Por cada URL de la Fase 1, el script visita la web de la clínica y:
 
 1. **Extracción del Director (Aviso Legal):** escanea el HTML buscando enlaces a "Aviso Legal", "Política de Privacidad" o "Condiciones". Dentro de esas páginas busca palabras clave como `Responsable`, `Titular del sitio web`, `DNI`, `NIF` y aísla el nombre completo de la persona física o sociedad administradora.
 
@@ -85,11 +136,16 @@ Por cada URL extraída en la Fase 1, el script visita la web de la clínica y:
    - **Genéricos:** `info@`, `contacto@`, `hola@`, etc.
    - **Directos:** `nombre@`, `direccion@`, `gerencia@`, etc.
 
-3. _(Opcional / futuro)_ Integración con la API de **Hunter.io** para cruzar el dominio y buscar correos corporativos cuando la extracción web falla.
+3. Manejo de errores: webs caídas, timeouts, redirects, páginas sin aviso legal.
+4. Output a `data/leads_enriched.json` y `data/leads_enriched.csv`.
+
+**Test:** Tomar 5 leads de Fase 1, enriquecer y validar manualmente contra las webs reales.
 
 ---
 
-### Fase 3 — Pipeline CRM Básico (Kanban)
+### Fase 3 — CRM Kanban Ligero (Streamlit)
+
+UI mínima en Streamlit + SQLite para gestionar el pipeline de ventas.
 
 | Estado       | Descripción                            |
 | ------------ | -------------------------------------- |
@@ -99,8 +155,34 @@ Por cada URL extraída en la Fase 1, el script visita la web de la clínica y:
 | `Meeting`    | Reunión agendada                       |
 | `Closed`     | Cliente ganado                         |
 
+**Funcionalidades:**
+
+- Carga de leads enriquecidos.
+- Vista Kanban con columnas por estado.
+- Mover leads entre estados.
+- Filtros por ciudad, puntuación, tiene email directo.
+- Persistencia en SQLite (`data/crm.db`).
+- Métricas básicas: leads por estado, tasa de conversión.
+
+**Test:** Cargar 10 leads, mover entre estados, refrescar y verificar persistencia.
+
 ---
 
-## Prioridades de Desarrollo
+### Fase 4 — Integraciones y Automatización ⏸️ SOLO DOCUMENTADA — NO SE IMPLEMENTA
 
-> El foco inicial es que el scraping de Google Maps con **Playwright** y la extracción del nombre desde el **Aviso Legal** sean extremadamente robustos y eviten bloqueos. No se requiere interfaz gráfica en esta fase.
+> Esta fase queda registrada como roadmap futuro. No se desarrollará en esta iteración.
+
+- Integración con API de **Hunter.io** (fallback de emails cuando la extracción web falla).
+- Automatización del envío de video-pitch.
+- Export a Notion / Airtable.
+- Scheduling con cron para scraping periódico.
+
+---
+
+## Orden de Trabajo
+
+```
+Fase 0 (Setup) → Fase 1 (Maps) → Test → Fase 2 (Enrich) → Test → Fase 3 (CRM) → Test
+```
+
+> Cada fase se desarrolla, se testea, y se avanza a la siguiente. Nada de avanzar sin validar.
