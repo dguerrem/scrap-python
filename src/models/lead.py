@@ -16,6 +16,12 @@ class Lead:
     resenas: int = 0
     estado: str = "Scraped"
 
+    # Campos de enriquecimiento (Fase 2)
+    director: str = ""           # Nombre del responsable/titular (Aviso Legal)
+    email_directo: str = ""      # Email personal (nombre@, gerencia@, etc.)
+    email_generico: str = ""     # Email genérico (info@, contacto@, etc.)
+    sociedad: str = ""           # Razón social si aparece
+
     def to_dict(self) -> dict:
         """Convierte el lead a diccionario (para JSON/CSV)."""
         return asdict(self)
