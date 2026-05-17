@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime
@@ -25,6 +26,15 @@ def is_cloud() -> bool:
     return bool(os.environ.get("TURSO_DATABASE_URL"))
 
 
+def _make_run_id(profile_nombre: str) -> str:
+    """Genera un run_id único: YYYYMMDD-HHMM-nombre-perfil."""
+    now = datetime.now()
+    ts = now.strftime("%Y%m%d-%H%M")
+    clean = re.sub(r"[^\w\-]", "-", profile_nombre.lower()).strip("-")
+    clean = re.sub(r"-{2,}", "-", clean)[:30]
+    return f"{ts}-{clean}"
+
+
 def launch(profile: dict, mode: str) -> dict:
     """
     Lanza la pipeline en background.
@@ -37,12 +47,14 @@ def launch(profile: dict, mode: str) -> dict:
 
     DATA_DIR.mkdir(exist_ok=True)
 
-    # Guardar el perfil en un fichero temporal para que el script lo lea
+    # Generar run_id y añadirlo al perfil
+    run_id = _make_run_id(profile.get("nombre", "manual"))
+    profile = {**profile, "run_id": run_id}
+
+    # Guardar perfil con run_id para que el script lo lea
     PROFILE_PATH.write_text(json.dumps(profile, ensure_ascii=False), encoding="utf-8")
 
-    # Determinar ejecutable Python (mismo venv que el CRM)
     python = sys.executable
-
     cities = profile.get("ciudades", [])
     cities_arg = ",".join(cities) if cities else None
 
@@ -52,7 +64,8 @@ def launch(profile: dict, mode: str) -> dict:
         if cities_arg:
             cmd += ["--cities", cities_arg]
     elif mode == "enricher":
-        cmd = [python, str(PROJECT_ROOT / "run_enricher.py"), "--headless"]
+        cmd = [python, str(PROJECT_ROOT / "run_enricher.py"), "--headless",
+               "--run-id", run_id]
     else:  # pipeline
         cmd = [python, str(PROJECT_ROOT / "run_pipeline.py"), "--headless",
                "--profile", str(PROFILE_PATH)]
@@ -67,12 +80,24 @@ def launch(profile: dict, mode: str) -> dict:
         cwd=str(PROJECT_ROOT),
     )
 
+    # Paths de los ficheros que generará esta ejecución
+    runs_dir = DATA_DIR / "runs"
+    output_files = {}
+    if mode in ("scraper", "pipeline"):
+        output_files["raw_json"] = str(runs_dir / f"{run_id}-raw.json")
+        output_files["raw_csv"] = str(runs_dir / f"{run_id}-raw.csv")
+    if mode in ("enricher", "pipeline"):
+        output_files["enriched_json"] = str(runs_dir / f"{run_id}-enriched.json")
+        output_files["enriched_csv"] = str(runs_dir / f"{run_id}-enriched.csv")
+
     status = {
         "pid": proc.pid,
         "mode": mode,
+        "run_id": run_id,
         "profile_nombre": profile.get("nombre", "Manual"),
         "started": datetime.now().isoformat(timespec="seconds"),
         "status": "running",
+        "output_files": output_files,
     }
     STATUS_PATH.write_text(json.dumps(status, ensure_ascii=False), encoding="utf-8")
     return status

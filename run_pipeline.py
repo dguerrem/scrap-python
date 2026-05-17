@@ -80,7 +80,7 @@ if __name__ == "__main__":
         log.info("FASE 2 — ENRIQUECIMIENTO WEB")
         log.info("=" * 60)
         from src.scraper.enricher import run as run_enricher
-        run_enricher(headless=args.headless)
+        run_enricher(headless=args.headless, run_id=profile.get("run_id") if profile else None)
     else:
         log.info("Enrichment saltado (--skip-enrichment)")
 

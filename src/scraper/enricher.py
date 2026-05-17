@@ -378,17 +378,19 @@ def enrich_lead(page: Page, lead_data: dict) -> dict:
     return lead_data
 
 
-def save_enriched(leads: list):
-    """Guarda los leads enriquecidos en JSON y CSV."""
+def save_enriched(leads: list, run_id: str | None = None):
+    """Guarda los leads enriquecidos en JSON y CSV.
+    Si se indica run_id, guarda también una copia con timestamp en data/runs/.
+    """
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    # JSON
+    # JSON principal
     json_path = DATA_DIR / "leads_enriched.json"
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(leads, f, ensure_ascii=False, indent=2)
     log.info(f"Guardado JSON: {json_path}")
 
-    # CSV
+    # CSV principal
     csv_path = DATA_DIR / "leads_enriched.csv"
     if leads:
         fields = list(leads[0].keys())
@@ -399,14 +401,31 @@ def save_enriched(leads: list):
                 writer.writerow(lead)
     log.info(f"Guardado CSV:  {csv_path}")
 
+    # Copia con timestamp
+    if run_id:
+        runs_dir = DATA_DIR / "runs"
+        runs_dir.mkdir(exist_ok=True)
+        ts_json = runs_dir / f"{run_id}-enriched.json"
+        ts_csv  = runs_dir / f"{run_id}-enriched.csv"
+        with open(ts_json, "w", encoding="utf-8") as f:
+            json.dump(leads, f, ensure_ascii=False, indent=2)
+        if leads:
+            with open(ts_csv, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=fields)
+                writer.writeheader()
+                for lead in leads:
+                    writer.writerow(lead)
+        log.info(f"Copia run guardada: {ts_json}")
 
-def run(limit: int | None = None, headless: bool = False):
+
+def run(limit: int | None = None, headless: bool = False, run_id: str | None = None):
     """
     Ejecuta el enriquecimiento sobre los leads de Fase 1.
 
     Args:
         limit:    Número máximo de leads a enriquecer (None = todos)
         headless: True = navegador invisible
+        run_id:   Identificador de la ejecución para guardar copia timestamped
     """
     # Cargar leads de Fase 1
     json_path = DATA_DIR / "leads_raw.json"
@@ -448,7 +467,7 @@ def run(limit: int | None = None, headless: bool = False):
         browser.close()
 
     # Guardar
-    save_enriched(leads)
+    save_enriched(leads, run_id=run_id)
 
     # Resumen
     enriched = sum(1 for l in leads if l.get("estado") == "Enriched")

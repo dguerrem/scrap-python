@@ -380,17 +380,21 @@ def load_existing_leads() -> list:
         return []
 
 
-def save_leads(leads: list):
-    """Guarda los leads en JSON y CSV dentro de data/."""
+def save_leads(leads: list, run_id: str | None = None):
+    """Guarda los leads en JSON y CSV dentro de data/.
+    Si se indica run_id, guarda también una copia con timestamp en data/runs/.
+    """
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    # --- JSON ---
+    data = [lead.to_dict() for lead in leads]
+
+    # --- JSON principal (siempre) ---
     json_path = DATA_DIR / "leads_raw.json"
     with open(json_path, "w", encoding="utf-8") as f:
-        json.dump([lead.to_dict() for lead in leads], f, ensure_ascii=False, indent=2)
+        json.dump(data, f, ensure_ascii=False, indent=2)
     log.info(f"Guardado JSON: {json_path} ({len(leads)} leads)")
 
-    # --- CSV ---
+    # --- CSV principal (siempre) ---
     csv_path = DATA_DIR / "leads_raw.csv"
     if leads:
         fields = list(leads[0].to_dict().keys())
@@ -400,6 +404,22 @@ def save_leads(leads: list):
             for lead in leads:
                 writer.writerow(lead.to_dict())
     log.info(f"Guardado CSV:  {csv_path} ({len(leads)} leads)")
+
+    # --- Copia con timestamp (si hay run_id) ---
+    if run_id:
+        runs_dir = DATA_DIR / "runs"
+        runs_dir.mkdir(exist_ok=True)
+        ts_json = runs_dir / f"{run_id}-raw.json"
+        ts_csv  = runs_dir / f"{run_id}-raw.csv"
+        with open(ts_json, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        if leads:
+            with open(ts_csv, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=fields)
+                writer.writeheader()
+                for lead in leads:
+                    writer.writerow(lead.to_dict())
+        log.info(f"Copia run guardada: {ts_json}")
 
 
 # ==============================================================
@@ -469,7 +489,7 @@ def run(cities: list | None = None, headless: bool = False, profile: dict | None
 
     # Combinar existentes + nuevos y guardar
     all_leads = existing + deduplicate(new_leads)
-    save_leads(all_leads)
+    save_leads(all_leads, run_id=cfg.get("run_id"))
 
     # Resumen final
     log.info(f"\n{'=' * 50}")

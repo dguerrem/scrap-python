@@ -33,6 +33,13 @@ if __name__ == "__main__":
         action="store_true",
         help="Ejecutar navegador en modo headless (sin ventana visible)",
     )
+    parser.add_argument(
+        "--run-id",
+        type=str,
+        default=None,
+        dest="run_id",
+        help="Identificador de la ejecución para guardar copia timestamped",
+    )
     args = parser.parse_args()
 
-    run(limit=args.limit, headless=args.headless)
+    run(limit=args.limit, headless=args.headless, run_id=args.run_id)

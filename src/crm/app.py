@@ -373,6 +373,25 @@ with tab_scrap:
             with st.expander("Ver log"):
                 st.code(pipeline_runner.get_log_tail(60), language=None)
 
+            # Botones de descarga para los ficheros generados
+            output_files = run_status.get("output_files", {})
+            if output_files:
+                st.markdown("**📁 Archivos generados:**")
+                dl_cols = st.columns(len(output_files))
+                for col, (key, fpath) in zip(dl_cols, output_files.items()):
+                    p = Path(fpath)
+                    if p.exists():
+                        mime = "application/json" if fpath.endswith(".json") else "text/csv"
+                        col.download_button(
+                            label=f"⬇️ {p.name}",
+                            data=p.read_bytes(),
+                            file_name=p.name,
+                            mime=mime,
+                            use_container_width=True,
+                        )
+                    else:
+                        col.caption(f"_{p.name}_  (no generado)")
+
             col_import, col_clear = st.columns(2)
             if col_import.button("📥 Importar leads generados", use_container_width=True, type="primary"):
                 enriched_path = DATA_DIR / "leads_enriched.json"
