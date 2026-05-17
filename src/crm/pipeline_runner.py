@@ -122,11 +122,31 @@ def get_status() -> dict | None:
 
 
 def _pid_alive(pid: int) -> bool:
+    # Try to reap zombie child first (Popen child in same process tree)
+    try:
+        wpid, _ = os.waitpid(pid, os.WNOHANG)
+        if wpid != 0:
+            return False  # Reaped → process finished
+        return True  # wpid == 0 → still running
+    except ChildProcessError:
+        pass  # Not our child — fall through
+    except OSError:
+        return False
+
+    # PID exists? os.kill(0) succeeds even for zombies, so also check ps
     try:
         os.kill(pid, 0)
-        return True
     except (ProcessLookupError, OSError):
         return False
+
+    try:
+        r = subprocess.run(
+            ["ps", "-p", str(pid), "-o", "state="],
+            capture_output=True, text=True, timeout=2,
+        )
+        return not r.stdout.strip().startswith("Z")
+    except Exception:
+        return True
 
 
 def kill_current() -> bool:

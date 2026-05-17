@@ -7,6 +7,7 @@ Ejecutar: streamlit run src/crm/app.py
 
 from __future__ import annotations
 
+import html as _html
 import json
 import os
 import streamlit as st
@@ -345,33 +346,43 @@ with tab_scrap:
     run_status = pipeline_runner.get_status()
     is_running = bool(run_status and run_status.get("status") == "running")
 
-    if run_status:
+    if is_running:
+        # Auto-refresh fragment: only this block re-runs every 3 s
+        @st.fragment(run_every=3)
+        def _live_pipeline():
+            s = pipeline_runner.get_status()
+            if not s or s.get("status") != "running":
+                st.rerun()  # pipeline ended → full rerun to show completed UI
+                return
+            st.info(
+                f"⏳ **Pipeline en ejecución** — "
+                f"_{s.get('profile_nombre', '')}_ · {s.get('started', '')}"
+            )
+            _log = _html.escape(pipeline_runner.get_log_tail(100) or "(esperando salida...)")
+            st.components.v1.html(
+                f'<pre style="height:280px;overflow-y:auto;margin:0;'
+                f'background:#0e1117;color:#fafafa;padding:1rem;'
+                f'border-radius:.5rem;font:14px/1.5 monospace"'
+                f' id="pl">{_log}</pre>'
+                f'<script>document.getElementById("pl").scrollTop=1e9</script>',
+                height=300,
+            )
+            if st.button("⛔ Cancelar", use_container_width=True, type="secondary"):
+                pipeline_runner.kill_current()
+                st.rerun()
+
+        _live_pipeline()
+        st.divider()
+
+    elif run_status:
         status_val = run_status.get("status", "")
         profile_nombre = run_status.get("profile_nombre", "")
-        started = run_status.get("started", "")
+        icon = "✅" if status_val == "completed" else "❌"
+        label = "completada" if status_val == "completed" else status_val
+        finished = run_status.get("finished", "")
 
-        if is_running:
-            st.info(f"⏳ **Pipeline en ejecución** — perfil: _{profile_nombre}_ · iniciada: {started}")
-            col_log, col_actions = st.columns([3, 1])
-            with col_log:
-                log_text = pipeline_runner.get_log_tail(40)
-                st.code(log_text or "(esperando salida...)", language=None)
-            with col_actions:
-                if st.button("🔄 Actualizar", use_container_width=True):
-                    st.rerun()
-                if st.button("⛔ Cancelar", use_container_width=True, type="secondary"):
-                    pipeline_runner.kill_current()
-                    st.warning("Pipeline cancelada.")
-                    st.rerun()
-        else:
-            icon = "✅" if status_val == "completed" else "❌"
-            label = "completada" if status_val == "completed" else status_val
-            finished = run_status.get("finished", "")
-            st.success(f"{icon} Pipeline **{label}** — perfil: _{profile_nombre}_ · {finished}")
-
-            # Mostrar últimas líneas del log
-            with st.expander("Ver log"):
-                st.code(pipeline_runner.get_log_tail(60), language=None)
+        with st.expander(f"{icon} Última ejecución: _{profile_nombre}_ · {finished}", expanded=False):
+            st.code(pipeline_runner.get_log_tail(60), language=None, height=200)
 
             # Botones de descarga para los ficheros generados
             output_files = run_status.get("output_files", {})
@@ -441,15 +452,15 @@ with tab_scrap:
 
                 st.divider()
 
-                # Lanzar pipeline con este perfil
+                # Botones de acción en una sola fila
                 if not pipeline_runner.is_cloud():
-                    launch_col1, launch_col2 = st.columns([2, 1])
-                    mode_label = launch_col1.selectbox(
+                    mode_label = st.selectbox(
                         "Modo de ejecución",
                         list(_MODE_OPTIONS.keys()),
                         key=f"mode_{p['id']}",
                     )
-                    if launch_col2.button(
+                    btn1, btn2, btn3 = st.columns(3)
+                    if btn1.button(
                         "🚀 Lanzar",
                         key=f"launch_{p['id']}",
                         disabled=is_running,
@@ -463,19 +474,27 @@ with tab_scrap:
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error al lanzar: {e}")
+                    if btn2.button("✏️ Editar", key=f"edit_{p['id']}", use_container_width=True):
+                        st.session_state["scrap_edit_id"] = p["id"]
+                        st.rerun()
+                    if btn3.button("🗑️ Eliminar", key=f"del_{p['id']}", use_container_width=True):
+                        delete_scrap_profile(p["id"])
+                        if st.session_state.get("scrap_edit_id") == p["id"]:
+                            st.session_state.pop("scrap_edit_id", None)
+                        st.rerun()
 
                     if is_running:
                         st.caption("⏳ Hay una pipeline en ejecución. Espera a que termine.")
-
-                btn_col1, btn_col2 = st.columns(2)
-                if btn_col1.button("✏️ Editar", key=f"edit_{p['id']}"):
-                    st.session_state["scrap_edit_id"] = p["id"]
-                    st.rerun()
-                if btn_col2.button("🗑️ Eliminar", key=f"del_{p['id']}"):
-                    delete_scrap_profile(p["id"])
-                    if st.session_state.get("scrap_edit_id") == p["id"]:
-                        st.session_state.pop("scrap_edit_id", None)
-                    st.rerun()
+                else:
+                    btn1, btn2 = st.columns(2)
+                    if btn1.button("✏️ Editar", key=f"edit_{p['id']}", use_container_width=True):
+                        st.session_state["scrap_edit_id"] = p["id"]
+                        st.rerun()
+                    if btn2.button("🗑️ Eliminar", key=f"del_{p['id']}", use_container_width=True):
+                        delete_scrap_profile(p["id"])
+                        if st.session_state.get("scrap_edit_id") == p["id"]:
+                            st.session_state.pop("scrap_edit_id", None)
+                        st.rerun()
     else:
         st.info("No hay perfiles guardados aún. Crea uno abajo.")
 
