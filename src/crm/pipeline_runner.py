@@ -12,6 +12,8 @@ import os
 import re
 import subprocess
 import sys
+import urllib.request
+import urllib.error
 from datetime import datetime
 from pathlib import Path
 
@@ -176,3 +178,106 @@ def clear_status():
     """Borra el fichero de estado (para empezar de nuevo)."""
     if STATUS_PATH.exists():
         STATUS_PATH.unlink()
+
+
+# ─── Cloud: GitHub Actions ───────────────────────────────────────
+
+def _gh_request(method: str, path: str, data: dict | None = None) -> dict | None:
+    """Helper para llamadas a la GitHub API."""
+    token = os.environ.get("GITHUB_PAT", "")
+    repo = os.environ.get("GITHUB_REPO", "")
+    if not token or not repo:
+        return None
+
+    url = f"https://api.github.com/repos/{repo}{path}"
+    body = json.dumps(data).encode("utf-8") if data else None
+
+    req = urllib.request.Request(
+        url,
+        data=body,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            **({"Content-Type": "application/json"} if body else {}),
+        },
+        method=method,
+    )
+
+    try:
+        resp = urllib.request.urlopen(req, timeout=15)
+        raw = resp.read().decode()
+        return json.loads(raw) if raw else {}
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"GitHub API {e.code}: {e.read().decode()[:200]}")
+
+
+def cloud_configured() -> bool:
+    """True si GITHUB_PAT y GITHUB_REPO están configurados."""
+    return bool(os.environ.get("GITHUB_PAT") and os.environ.get("GITHUB_REPO"))
+
+
+def launch_cloud(profile: dict, mode: str) -> dict:
+    """Dispara el workflow pipeline.yml vía workflow_dispatch."""
+    if not cloud_configured():
+        raise RuntimeError(
+            "Configura GITHUB_PAT y GITHUB_REPO en los secrets de Streamlit."
+        )
+
+    cities = profile.get("ciudades", [])
+
+    _gh_request("POST", "/actions/workflows/pipeline.yml/dispatches", {
+        "ref": "main",
+        "inputs": {
+            "mode": mode,
+            "profile_json": json.dumps(profile, ensure_ascii=False),
+            "cities": ",".join(cities) if cities else "",
+        },
+    })
+
+    return {
+        "status": "dispatched",
+        "mode": mode,
+        "profile_nombre": profile.get("nombre", "Manual"),
+        "dispatched_at": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
+def get_cloud_status() -> dict | None:
+    """Estado del último workflow run de pipeline.yml."""
+    if not cloud_configured():
+        return None
+
+    try:
+        data = _gh_request("GET", "/actions/workflows/pipeline.yml/runs?per_page=1")
+    except Exception:
+        return None
+
+    if not data:
+        return None
+
+    runs = data.get("workflow_runs", [])
+    if not runs:
+        return None
+
+    run = runs[0]
+    gh_status = run.get("status", "")
+    gh_conclusion = run.get("conclusion")
+
+    if gh_status in ("queued", "in_progress", "waiting", "pending"):
+        status = "running"
+    elif gh_conclusion == "success":
+        status = "completed"
+    elif gh_conclusion == "cancelled":
+        status = "cancelled"
+    else:
+        status = "failed"
+
+    return {
+        "status": status,
+        "gh_status": gh_status,
+        "gh_conclusion": gh_conclusion,
+        "html_url": run.get("html_url", ""),
+        "created_at": run.get("created_at", ""),
+        "updated_at": run.get("updated_at", ""),
+    }

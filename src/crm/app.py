@@ -18,6 +18,9 @@ try:
     if "TURSO_DATABASE_URL" in st.secrets:
         os.environ["TURSO_DATABASE_URL"] = st.secrets["TURSO_DATABASE_URL"]
         os.environ["TURSO_AUTH_TOKEN"] = st.secrets["TURSO_AUTH_TOKEN"]
+    for _k in ("GITHUB_PAT", "GITHUB_REPO"):
+        if _k in st.secrets:
+            os.environ[_k] = st.secrets[_k]
 except Exception:
     pass
 
@@ -342,94 +345,135 @@ _MODE_OPTIONS = {
 with tab_scrap:
     st.subheader("⚙️ Perfiles de Búsqueda")
 
-    # ── Estado de ejecución activa ──────────────────────
-    run_status = pipeline_runner.get_status()
-    is_running = bool(run_status and run_status.get("status") == "running")
+    # ── Estado de ejecución ────────────────────────────
+    _in_cloud = pipeline_runner.is_cloud()
 
-    if is_running:
-        # Auto-refresh fragment: only this block re-runs every 3 s
-        @st.fragment(run_every=3)
-        def _live_pipeline():
-            s = pipeline_runner.get_status()
-            if not s or s.get("status") != "running":
-                st.rerun()  # pipeline ended → full rerun to show completed UI
-                return
+    if _in_cloud:
+        # ── Cloud: GitHub Actions ──
+        if pipeline_runner.cloud_configured():
+            cloud_status = pipeline_runner.get_cloud_status()
+            is_running = bool(cloud_status and cloud_status.get("status") == "running")
+
+            if is_running:
+                @st.fragment(run_every=10)
+                def _live_cloud():
+                    s = pipeline_runner.get_cloud_status()
+                    if not s or s.get("status") != "running":
+                        st.rerun()
+                        return
+                    st.info(
+                        f"⏳ **Pipeline en ejecución** en GitHub Actions "
+                        f"({s.get('gh_status', '')})"
+                    )
+                    url = s.get("html_url", "")
+                    if url:
+                        st.markdown(f"[🔗 Ver progreso en GitHub]({url})")
+
+                _live_cloud()
+                st.divider()
+            elif cloud_status:
+                icon = {"completed": "✅", "failed": "❌", "cancelled": "⛔"}.get(
+                    cloud_status["status"], "❓"
+                )
+                url = cloud_status.get("html_url", "")
+                with st.expander(
+                    f"{icon} Última ejecución: {cloud_status['status']}",
+                    expanded=False,
+                ):
+                    if url:
+                        st.markdown(f"[🔗 Ver en GitHub Actions]({url})")
+                    st.caption(
+                        f"Creada: {cloud_status.get('created_at', '')} — "
+                        f"Actualizada: {cloud_status.get('updated_at', '')}"
+                    )
+                    if cloud_status["status"] == "completed":
+                        st.success("Los leads se importaron automáticamente.")
+                st.divider()
+        else:
+            is_running = False
             st.info(
-                f"⏳ **Pipeline en ejecución** — "
-                f"_{s.get('profile_nombre', '')}_ · {s.get('started', '')}"
+                "ℹ️ Configura `GITHUB_PAT` y `GITHUB_REPO` en los secrets "
+                "de Streamlit para lanzar pipelines desde aquí."
             )
-            _log = _html.escape(pipeline_runner.get_log_tail(100) or "(esperando salida...)")
-            st.components.v1.html(
-                f'<pre style="height:280px;overflow-y:auto;margin:0;'
-                f'background:#0e1117;color:#fafafa;padding:1rem;'
-                f'border-radius:.5rem;font:14px/1.5 monospace"'
-                f' id="pl">{_log}</pre>'
-                f'<script>document.getElementById("pl").scrollTop=1e9</script>',
-                height=300,
-            )
-            if st.button("⛔ Cancelar", use_container_width=True, type="secondary"):
-                pipeline_runner.kill_current()
-                st.rerun()
+    else:
+        # ── Local: subproceso ──
+        run_status = pipeline_runner.get_status()
+        is_running = bool(run_status and run_status.get("status") == "running")
 
-        _live_pipeline()
-        st.divider()
+        if is_running:
+            @st.fragment(run_every=3)
+            def _live_pipeline():
+                s = pipeline_runner.get_status()
+                if not s or s.get("status") != "running":
+                    st.rerun()
+                    return
+                st.info(
+                    f"⏳ **Pipeline en ejecución** — "
+                    f"_{s.get('profile_nombre', '')}_ · {s.get('started', '')}"
+                )
+                _log = _html.escape(pipeline_runner.get_log_tail(100) or "(esperando salida...)")
+                st.components.v1.html(
+                    f'<pre style="height:280px;overflow-y:auto;margin:0;'
+                    f'background:#0e1117;color:#fafafa;padding:1rem;'
+                    f'border-radius:.5rem;font:14px/1.5 monospace"'
+                    f' id="pl">{_log}</pre>'
+                    f'<script>document.getElementById("pl").scrollTop=1e9</script>',
+                    height=300,
+                )
+                if st.button("⛔ Cancelar", use_container_width=True, type="secondary"):
+                    pipeline_runner.kill_current()
+                    st.rerun()
 
-    elif run_status:
-        status_val = run_status.get("status", "")
-        profile_nombre = run_status.get("profile_nombre", "")
-        icon = "✅" if status_val == "completed" else "❌"
-        label = "completada" if status_val == "completed" else status_val
-        finished = run_status.get("finished", "")
+            _live_pipeline()
+            st.divider()
 
-        with st.expander(f"{icon} Última ejecución: _{profile_nombre}_ · {finished}", expanded=False):
-            st.code(pipeline_runner.get_log_tail(60), language=None, height=200)
+        elif run_status:
+            status_val = run_status.get("status", "")
+            profile_nombre = run_status.get("profile_nombre", "")
+            icon = "✅" if status_val == "completed" else "❌"
+            label = "completada" if status_val == "completed" else status_val
+            finished = run_status.get("finished", "")
 
-            # Botones de descarga para los ficheros generados
-            output_files = run_status.get("output_files", {})
-            if output_files:
-                st.markdown("**📁 Archivos generados:**")
-                dl_cols = st.columns(len(output_files))
-                for col, (key, fpath) in zip(dl_cols, output_files.items()):
-                    p = Path(fpath)
-                    if p.exists():
-                        mime = "application/json" if fpath.endswith(".json") else "text/csv"
-                        col.download_button(
-                            label=f"⬇️ {p.name}",
-                            data=p.read_bytes(),
-                            file_name=p.name,
-                            mime=mime,
-                            use_container_width=True,
-                        )
+            with st.expander(f"{icon} Última ejecución: _{profile_nombre}_ · {finished}", expanded=False):
+                st.code(pipeline_runner.get_log_tail(60), language=None, height=200)
+
+                output_files = run_status.get("output_files", {})
+                if output_files:
+                    st.markdown("**📁 Archivos generados:**")
+                    dl_cols = st.columns(len(output_files))
+                    for col, (key, fpath) in zip(dl_cols, output_files.items()):
+                        p = Path(fpath)
+                        if p.exists():
+                            mime = "application/json" if fpath.endswith(".json") else "text/csv"
+                            col.download_button(
+                                label=f"⬇️ {p.name}",
+                                data=p.read_bytes(),
+                                file_name=p.name,
+                                mime=mime,
+                                use_container_width=True,
+                            )
+                        else:
+                            col.caption(f"_{p.name}_  (no generado)")
+
+                col_import, col_clear = st.columns(2)
+                if col_import.button("📥 Importar leads generados", use_container_width=True, type="primary"):
+                    enriched_path = DATA_DIR / "leads_enriched.json"
+                    raw_path = DATA_DIR / "leads_raw.json"
+                    imported = 0
+                    if enriched_path.exists():
+                        imported = import_from_json(enriched_path)
+                    elif raw_path.exists():
+                        imported = import_from_json(raw_path)
+                    if imported:
+                        st.success(f"✅ {imported} leads importados")
                     else:
-                        col.caption(f"_{p.name}_  (no generado)")
+                        st.info("No hay leads nuevos para importar")
+                    st.rerun()
+                if col_clear.button("🗑️ Limpiar estado", use_container_width=True):
+                    pipeline_runner.clear_status()
+                    st.rerun()
 
-            col_import, col_clear = st.columns(2)
-            if col_import.button("📥 Importar leads generados", use_container_width=True, type="primary"):
-                enriched_path = DATA_DIR / "leads_enriched.json"
-                raw_path = DATA_DIR / "leads_raw.json"
-                imported = 0
-                if enriched_path.exists():
-                    imported = import_from_json(enriched_path)
-                elif raw_path.exists():
-                    imported = import_from_json(raw_path)
-                if imported:
-                    st.success(f"✅ {imported} leads importados")
-                else:
-                    st.info("No hay leads nuevos para importar")
-                st.rerun()
-            if col_clear.button("🗑️ Limpiar estado", use_container_width=True):
-                pipeline_runner.clear_status()
-                st.rerun()
-
-        st.divider()
-
-    # ── En cloud: no se puede ejecutar ──────────────────
-    if pipeline_runner.is_cloud():
-        st.warning(
-            "⚠️ **Modo cloud activo.** La pipeline requiere Playwright y no puede "
-            "ejecutarse en Streamlit Cloud. Para lanzar desde el CRM en producción, "
-            "implementa la integración con GitHub Actions (ver `context/github-actions-plan.md`)."
-        )
+            st.divider()
 
     # ── Perfiles guardados ──────────────────────────────
     profiles = get_scrap_profiles()
@@ -453,7 +497,8 @@ with tab_scrap:
                 st.divider()
 
                 # Botones de acción en una sola fila
-                if not pipeline_runner.is_cloud():
+                _can_launch = (not _in_cloud) or pipeline_runner.cloud_configured()
+                if _can_launch:
                     mode_label = st.selectbox(
                         "Modo de ejecución",
                         list(_MODE_OPTIONS.keys()),
@@ -469,8 +514,12 @@ with tab_scrap:
                     ):
                         try:
                             mode = _MODE_OPTIONS[mode_label]
-                            pipeline_runner.launch(dict(p), mode)
-                            st.success(f"Pipeline iniciada en background.")
+                            if _in_cloud:
+                                pipeline_runner.launch_cloud(dict(p), mode)
+                                st.success("Pipeline disparada en GitHub Actions.")
+                            else:
+                                pipeline_runner.launch(dict(p), mode)
+                                st.success("Pipeline iniciada en background.")
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error al lanzar: {e}")

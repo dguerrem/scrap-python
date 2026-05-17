@@ -1,0 +1,103 @@
+name: "🚀 Pipeline de Leads"
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "scraper | enricher | pipeline"
+        required: true
+        default: "pipeline"
+        type: choice
+        options:
+          - pipeline
+          - scraper
+          - enricher
+      profile_json:
+        description: "Perfil de scrap (JSON)"
+        required: true
+        type: string
+      cities:
+        description: "Ciudades separadas por coma (vacío = las del perfil)"
+        required: false
+        default: ""
+        type: string
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install playwright
+          playwright install chromium --with-deps
+
+      - name: Prepare data directory & profile
+        env:
+          PROFILE_JSON: ${{ inputs.profile_json }}
+        run: |
+          mkdir -p data/runs
+          python -c "
+          import os, json
+          p = json.loads(os.environ['PROFILE_JSON'])
+          with open('data/active_profile.json', 'w') as f:
+              json.dump(p, f, ensure_ascii=False)
+          print('Profile:', p.get('nombre', '?'))
+          "
+
+      - name: Run pipeline
+        run: |
+          MODE="${{ inputs.mode }}"
+          CITIES="${{ inputs.cities }}"
+          CITIES_ARG=""
+          if [ -n "$CITIES" ]; then
+            CITIES_ARG="--cities $CITIES"
+          fi
+
+          if [ "$MODE" = "scraper" ]; then
+            python run_scraper.py --headless --profile data/active_profile.json $CITIES_ARG
+          elif [ "$MODE" = "enricher" ]; then
+            python run_enricher.py --headless --run-id ci-run
+          else
+            python run_pipeline.py --headless --profile data/active_profile.json $CITIES_ARG
+          fi
+
+      - name: Auto-import leads to Turso
+        if: always()
+        run: |
+          python -c "
+          from src.crm.db import import_from_json
+          from pathlib import Path
+          enriched = Path('data/leads_enriched.json')
+          raw = Path('data/leads_raw.json')
+          if enriched.exists():
+              n = import_from_json(enriched)
+              print(f'Imported {n} enriched leads to Turso')
+          elif raw.exists():
+              n = import_from_json(raw)
+              print(f'Imported {n} raw leads to Turso')
+          else:
+              print('No lead files found to import')
+          "
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: leads-${{ github.run_number }}
+          path: |
+            data/leads_raw.json
+            data/leads_enriched.json
+            data/runs/
+          if-no-files-found: ignore
+          retention-days: 30
