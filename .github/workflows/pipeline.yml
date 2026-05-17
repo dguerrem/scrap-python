@@ -112,7 +112,9 @@ jobs:
           name: leads-${{ github.run_number }}
           path: |
             data/leads_raw.json
+            data/leads_raw.csv
             data/leads_enriched.json
+            data/leads_enriched.csv
             data/runs/
           if-no-files-found: ignore
           retention-days: 30
