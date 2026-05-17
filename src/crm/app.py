@@ -38,6 +38,28 @@ from src.crm import pipeline_runner
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 
+
+# ── Cache: evita llamadas repetidas a Turso en cada rerun ──
+@st.cache_data(ttl=300)
+def _c_get_all_leads():
+    return [dict(r) for r in get_all_leads()]
+
+@st.cache_data(ttl=300)
+def _c_get_leads_by_stage(stage):
+    return [dict(r) for r in get_leads_by_stage(stage)]
+
+@st.cache_data(ttl=300)
+def _c_get_stats():
+    return get_stats()
+
+@st.cache_data(ttl=300)
+def _c_get_scrap_profiles():
+    return get_scrap_profiles()
+
+
+def _clear_cache():
+    st.cache_data.clear()
+
 # ======================================================
 # CONFIGURACIÓN DE PÁGINA
 # ======================================================
@@ -72,6 +94,7 @@ with st.sidebar:
             count = import_from_json(json_enriched)
             if count > 0:
                 st.success(f"✅ {count} leads importados")
+                _clear_cache()
                 st.rerun()
             else:
                 st.info("No hay leads nuevos para importar")
@@ -81,6 +104,7 @@ with st.sidebar:
             count = import_from_json(json_raw)
             if count > 0:
                 st.success(f"✅ {count} leads importados")
+                _clear_cache()
                 st.rerun()
             else:
                 st.info("No hay leads nuevos para importar")
@@ -92,6 +116,7 @@ with st.sidebar:
         count = import_leads(leads_data)
         if count > 0:
             st.success(f"✅ {count} leads importados")
+            _clear_cache()
             st.rerun()
         else:
             st.info("No hay leads nuevos para importar")
@@ -100,7 +125,7 @@ with st.sidebar:
 
     # Estadísticas
     st.subheader("📊 Estadísticas")
-    stats = get_stats()
+    stats = _c_get_stats()
 
     col1, col2 = st.columns(2)
     col1.metric("Total leads", stats["total"])
@@ -122,6 +147,7 @@ with st.sidebar:
     ):
         deleted = clear_all_leads()
         st.success(f"✅ {deleted} leads eliminados")
+        _clear_cache()
         st.rerun()
 
     st.divider()
@@ -145,7 +171,7 @@ with tab_kanban:
 
     for i, stage in enumerate(PIPELINE_STAGES):
         with cols[i]:
-            leads = get_leads_by_stage(stage)
+            leads = _c_get_leads_by_stage(stage)
             st.subheader(f"{stage} ({len(leads)})")
 
             for lead in leads:
@@ -187,6 +213,7 @@ with tab_kanban:
                     )
                     if new_stage != stage:
                         update_lead_stage(lead["id"], new_stage)
+                        _clear_cache()
                         st.rerun()
 
                     # Notas
@@ -205,7 +232,7 @@ with tab_kanban:
 # ======================================================
 
 with tab_tabla:
-    all_leads = get_all_leads()
+    all_leads = _c_get_all_leads()
 
     if not all_leads:
         st.info("No hay leads. Importa datos desde la barra lateral.")
@@ -265,7 +292,7 @@ with tab_tabla:
 # ======================================================
 
 with tab_detalle:
-    all_leads = get_all_leads()
+    all_leads = _c_get_all_leads()
 
     if not all_leads:
         st.info("No hay leads. Importa datos desde la barra lateral.")
@@ -305,6 +332,7 @@ with tab_detalle:
                 )
                 if new_stage != lead["etapa"]:
                     update_lead_stage(lead["id"], new_stage)
+                    _clear_cache()
                     st.rerun()
 
                 st.divider()
@@ -468,6 +496,7 @@ with tab_scrap:
                         st.success(f"✅ {imported} leads importados")
                     else:
                         st.info("No hay leads nuevos para importar")
+                    _clear_cache()
                     st.rerun()
                 if col_clear.button("🗑️ Limpiar estado", use_container_width=True):
                     pipeline_runner.clear_status()
@@ -476,7 +505,7 @@ with tab_scrap:
             st.divider()
 
     # ── Perfiles guardados ──────────────────────────────
-    profiles = get_scrap_profiles()
+    profiles = _c_get_scrap_profiles()
     edit_id = st.session_state.get("scrap_edit_id")
 
     st.caption("Configura los parámetros del scraper y guárdalos como perfiles reutilizables.")
@@ -530,6 +559,7 @@ with tab_scrap:
                         delete_scrap_profile(p["id"])
                         if st.session_state.get("scrap_edit_id") == p["id"]:
                             st.session_state.pop("scrap_edit_id", None)
+                        _clear_cache()
                         st.rerun()
 
                     if is_running:
@@ -543,6 +573,7 @@ with tab_scrap:
                         delete_scrap_profile(p["id"])
                         if st.session_state.get("scrap_edit_id") == p["id"]:
                             st.session_state.pop("scrap_edit_id", None)
+                        _clear_cache()
                         st.rerun()
     else:
         st.info("No hay perfiles guardados aún. Crea uno abajo.")
@@ -614,6 +645,7 @@ with tab_scrap:
                         f_ciudades, f_reviews, f_rating, f_require_web, f_scrolls,
                     )
                     st.success("✅ Perfil guardado")
+                _clear_cache()
                 st.rerun()
 
     if editing:
