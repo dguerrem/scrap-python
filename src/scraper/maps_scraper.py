@@ -437,7 +437,14 @@ def run(cities: list | None = None, headless: bool = False, profile: dict | None
         profile:  Dict con parámetros del personalizador de scrap (opcional)
     """
     cfg = profile or {}
-    targets = cities or (json.loads(cfg["ciudades"]) if cfg.get("ciudades") else None) or CITIES
+    _raw_ciudades = cfg.get("ciudades")
+    if isinstance(_raw_ciudades, list):
+        _parsed_ciudades = _raw_ciudades or None
+    elif isinstance(_raw_ciudades, str):
+        _parsed_ciudades = json.loads(_raw_ciudades) or None
+    else:
+        _parsed_ciudades = None
+    targets = cities or _parsed_ciudades or CITIES
     search_query = cfg.get("search_query", SEARCH_QUERY)
     min_rating = float(cfg.get("min_rating", MIN_RATING))
     min_reviews = int(cfg.get("min_reviews", MIN_REVIEWS))
