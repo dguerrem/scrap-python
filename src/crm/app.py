@@ -416,6 +416,7 @@ with tab_scrap:
                 def _live_cloud():
                     s = pipeline_runner.get_cloud_status()
                     if not s or s.get("status") != "running":
+                        _clear_cache()
                         st.rerun()
                         return
                     st.info(
@@ -429,22 +430,33 @@ with tab_scrap:
                 _live_cloud()
                 st.divider()
             elif cloud_status:
+                # Pipeline terminó — limpiar caché para reflejar nuevos leads
+                if "cloud_cache_cleared" not in st.session_state:
+                    _clear_cache()
+                    st.session_state["cloud_cache_cleared"] = True
+
                 icon = {"completed": "✅", "failed": "❌", "cancelled": "⛔"}.get(
                     cloud_status["status"], "❓"
                 )
                 url = cloud_status.get("html_url", "")
+                run_id = cloud_status.get("run_id", "")
                 with st.expander(
                     f"{icon} Última ejecución: {cloud_status['status']}",
                     expanded=False,
                 ):
                     if url:
                         st.markdown(f"[🔗 Ver en GitHub Actions]({url})")
+                    # Enlace directo a artifacts
+                    if url and run_id:
+                        st.markdown(f"[📦 Descargar artifacts]({url}#artifacts)")
                     st.caption(
                         f"Creada: {cloud_status.get('created_at', '')} — "
                         f"Actualizada: {cloud_status.get('updated_at', '')}"
                     )
                     if cloud_status["status"] == "completed":
                         st.success("Los leads se importaron automáticamente.")
+                    elif cloud_status["status"] == "failed":
+                        st.warning("La pipeline falló. Revisa los logs en GitHub Actions.")
                 st.divider()
         else:
             is_running = False
@@ -577,6 +589,7 @@ with tab_scrap:
                             mode = _MODE_OPTIONS[mode_label]
                             if _in_cloud:
                                 pipeline_runner.launch_cloud(dict(p), mode)
+                                st.session_state.pop("cloud_cache_cleared", None)
                                 st.success("Pipeline disparada en GitHub Actions.")
                             else:
                                 pipeline_runner.launch(dict(p), mode)

@@ -278,6 +278,7 @@ def get_cloud_status() -> dict | None:
         "gh_status": gh_status,
         "gh_conclusion": gh_conclusion,
         "html_url": run.get("html_url", ""),
+        "run_id": run.get("id", ""),
         "created_at": run.get("created_at", ""),
         "updated_at": run.get("updated_at", ""),
     }
