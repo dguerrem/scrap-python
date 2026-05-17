@@ -76,18 +76,33 @@ jobs:
         if: always()
         run: |
           python -c "
+          import json
           from src.crm.db import import_from_json
           from pathlib import Path
-          enriched = Path('data/leads_enriched.json')
-          raw = Path('data/leads_raw.json')
-          if enriched.exists():
-              n = import_from_json(enriched)
-              print(f'Imported {n} enriched leads to Turso')
-          elif raw.exists():
-              n = import_from_json(raw)
-              print(f'Imported {n} raw leads to Turso')
+
+          # Leer perfil para saber si auto_import está activo
+          profile_path = Path('data/active_profile.json')
+          profile = {}
+          if profile_path.exists():
+              profile = json.loads(profile_path.read_text())
+
+          auto_import = profile.get('auto_import', 1)
+          nombre = profile.get('nombre', 'Manual')
+
+          if not auto_import:
+              print(f'Auto-import desactivado para perfil: {nombre}')
+              print('Los leads quedan como artifacts para importar manualmente.')
           else:
-              print('No lead files found to import')
+              enriched = Path('data/leads_enriched.json')
+              raw = Path('data/leads_raw.json')
+              if enriched.exists():
+                  n = import_from_json(enriched, perfil_origen=nombre)
+                  print(f'Imported {n} enriched leads to Turso (perfil: {nombre})')
+              elif raw.exists():
+                  n = import_from_json(raw, perfil_origen=nombre)
+                  print(f'Imported {n} raw leads to Turso (perfil: {nombre})')
+              else:
+                  print('No lead files found to import')
           "
 
       - name: Upload artifacts

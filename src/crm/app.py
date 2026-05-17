@@ -167,11 +167,25 @@ tab_kanban, tab_tabla, tab_detalle, tab_scrap = st.tabs(
 # ======================================================
 
 with tab_kanban:
+    # Filtro por perfil de origen
+    _all_leads_for_filter = _c_get_all_leads()
+    _origenes = sorted({l.get("perfil_origen", "") or "(sin perfil)" for l in _all_leads_for_filter})
+    if len(_origenes) > 1:
+        _filtro_origen = st.multiselect(
+            "Filtrar por perfil de origen",
+            _origenes,
+            default=_origenes,
+            key="kanban_origen",
+        )
+    else:
+        _filtro_origen = _origenes
+
     cols = st.columns(len(PIPELINE_STAGES))
 
     for i, stage in enumerate(PIPELINE_STAGES):
         with cols[i]:
-            leads = _c_get_leads_by_stage(stage)
+            leads = [l for l in _c_get_leads_by_stage(stage)
+                     if (l.get("perfil_origen") or "(sin perfil)") in _filtro_origen]
             st.subheader(f"{stage} ({len(leads)})")
 
             for lead in leads:
@@ -192,6 +206,8 @@ with tab_kanban:
 
                 with st.expander(f"{quality} {lead['nombre'][:30]}"):
                     st.caption(f"📍 {lead['ciudad']} · ⭐ {lead['puntuacion']} · 💬 {lead['resenas']}")
+                    if lead.get("perfil_origen"):
+                        st.caption(f"🎯 _{lead['perfil_origen']}_")
 
                     if lead["director"]:
                         st.write(f"👤 **{lead['director']}**")
@@ -238,7 +254,7 @@ with tab_tabla:
         st.info("No hay leads. Importa datos desde la barra lateral.")
     else:
         # Filtros
-        col_filter1, col_filter2, col_filter3 = st.columns(3)
+        col_filter1, col_filter2, col_filter3, col_filter4 = st.columns(4)
         with col_filter1:
             filter_stage = st.multiselect(
                 "Filtrar por etapa",
@@ -256,9 +272,19 @@ with tab_tabla:
                 sorted(set(l["ciudad"] for l in all_leads)),
                 default=sorted(set(l["ciudad"] for l in all_leads)),
             )
+        with col_filter4:
+            _tabla_origenes = sorted({l.get("perfil_origen", "") or "(sin perfil)" for l in all_leads})
+            filter_origen = st.multiselect(
+                "Filtrar por perfil origen",
+                _tabla_origenes,
+                default=_tabla_origenes,
+            )
 
         # Aplicar filtros
-        filtered = [l for l in all_leads if l["etapa"] in filter_stage and l["ciudad"] in filter_city]
+        filtered = [l for l in all_leads
+                    if l["etapa"] in filter_stage
+                    and l["ciudad"] in filter_city
+                    and (l.get("perfil_origen") or "(sin perfil)") in filter_origen]
 
         if filter_email == "Con email directo":
             filtered = [l for l in filtered if l["email_directo"]]
@@ -282,6 +308,7 @@ with tab_tabla:
                 "Email": email,
                 "Sociedad": l["sociedad"] or "—",
                 "Etapa": l["etapa"],
+                "Origen": l.get("perfil_origen") or "—",
             })
 
         st.dataframe(display_data, use_container_width=True, hide_index=True)
@@ -321,6 +348,8 @@ with tab_detalle:
                 st.write(f"📧 **Email directo:** {lead['email_directo'] or '—'}")
                 st.write(f"📧 **Email genérico:** {lead['email_generico'] or '—'}")
                 st.write(f"🏢 **Sociedad:** {lead['sociedad'] or '—'}")
+                if lead.get("perfil_origen"):
+                    st.write(f"🎯 **Perfil origen:** {lead['perfil_origen']}")
 
             with col2:
                 st.subheader("Pipeline")
@@ -488,10 +517,11 @@ with tab_scrap:
                     enriched_path = DATA_DIR / "leads_enriched.json"
                     raw_path = DATA_DIR / "leads_raw.json"
                     imported = 0
+                    _import_origen = run_status.get("profile_nombre", profile_nombre)
                     if enriched_path.exists():
-                        imported = import_from_json(enriched_path)
+                        imported = import_from_json(enriched_path, perfil_origen=_import_origen)
                     elif raw_path.exists():
-                        imported = import_from_json(raw_path)
+                        imported = import_from_json(raw_path, perfil_origen=_import_origen)
                     if imported:
                         st.success(f"✅ {imported} leads importados")
                     else:
@@ -522,6 +552,8 @@ with tab_scrap:
                 col_a.write(f"💬 Min reseñas: **{p['min_reviews']}**")
                 col_b.write(f"🌐 Web: **{web_label}**")
                 col_b.write(f"📜 Max scrolls: **{p['max_scrolls']}**")
+                _ai = p.get("auto_import", 1)
+                col_b.write(f"📥 Auto-import: **{'Sí' if _ai else 'No'}**")
 
                 st.divider()
 
@@ -624,6 +656,12 @@ with tab_scrap:
             value=int(editing["max_scrolls"]) if editing else 20,
         )
 
+        f_auto_import = st.checkbox(
+            "📥 Auto-importar leads a Turso al terminar",
+            value=bool(editing["auto_import"]) if editing else True,
+            help="Si está desactivado, los leads se quedan como artifacts en GitHub y se importan manualmente.",
+        )
+
         submitted = st.form_submit_button("💾 Guardar perfil", type="primary", use_container_width=True)
         if submitted:
             if not f_nombre.strip():
@@ -636,6 +674,7 @@ with tab_scrap:
                     update_scrap_profile(
                         editing["id"], f_nombre.strip(), f_query.strip(),
                         f_ciudades, f_reviews, f_rating, f_require_web, f_scrolls,
+                        f_auto_import,
                     )
                     st.session_state.pop("scrap_edit_id", None)
                     st.success("✅ Perfil actualizado")
@@ -643,6 +682,7 @@ with tab_scrap:
                     save_scrap_profile(
                         f_nombre.strip(), f_query.strip(),
                         f_ciudades, f_reviews, f_rating, f_require_web, f_scrolls,
+                        f_auto_import,
                     )
                     st.success("✅ Perfil guardado")
                 _clear_cache()

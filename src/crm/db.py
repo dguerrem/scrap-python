@@ -64,6 +64,7 @@ def init_db():
             sociedad    TEXT DEFAULT '',
             etapa       TEXT DEFAULT 'Nuevo',
             notas       TEXT DEFAULT '',
+            perfil_origen  TEXT DEFAULT '',
             created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -78,14 +79,24 @@ def init_db():
             min_rating      REAL DEFAULT 4.0,
             require_website TEXT DEFAULT 'required',
             max_scrolls     INTEGER DEFAULT 20,
+            auto_import     INTEGER DEFAULT 1,
             created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    # Migraciones: añadir columnas a tablas ya existentes
+    for stmt in [
+        "ALTER TABLE leads ADD COLUMN perfil_origen TEXT DEFAULT ''",
+        "ALTER TABLE scrap_profiles ADD COLUMN auto_import INTEGER DEFAULT 1",
+    ]:
+        try:
+            conn.execute(stmt)
+        except Exception:
+            pass  # columna ya existe
     conn.commit()
     conn.close()
 
 
-def import_leads(leads: list[dict]) -> int:
+def import_leads(leads: list[dict], perfil_origen: str = "") -> int:
     """
     Importa una lista de leads (dicts).
     Salta duplicados (mismo nombre + ciudad).
@@ -94,7 +105,6 @@ def import_leads(leads: list[dict]) -> int:
     conn = get_conn()
     init_db()
 
-    # Pre-fetch existing (nombre, ciudad) en una sola query
     existing = conn.execute("SELECT nombre, ciudad FROM leads").fetchall()
     existing_keys = {(r["nombre"], r["ciudad"]) for r in existing}
 
@@ -110,8 +120,8 @@ def import_leads(leads: list[dict]) -> int:
     sql = """
         INSERT INTO leads (nombre, ciudad, direccion, telefono, url,
                          puntuacion, resenas, director, email_directo,
-                         email_generico, sociedad, etapa)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         email_generico, sociedad, etapa, perfil_origen)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """
 
     params_list = [
@@ -128,6 +138,7 @@ def import_leads(leads: list[dict]) -> int:
             l.get("email_generico", ""),
             l.get("sociedad", ""),
             "Nuevo",
+            perfil_origen,
         )
         for l in new_leads
     ]
@@ -138,12 +149,12 @@ def import_leads(leads: list[dict]) -> int:
     return len(new_leads)
 
 
-def import_from_json(json_path: str | Path) -> int:
+def import_from_json(json_path: str | Path, perfil_origen: str = "") -> int:
     """Importa leads desde un fichero JSON."""
     json_path = Path(json_path)
     with open(json_path, "r", encoding="utf-8") as f:
         leads = json.load(f)
-    return import_leads(leads)
+    return import_leads(leads, perfil_origen=perfil_origen)
 
 
 def get_leads_by_stage(etapa: str) -> list:
@@ -238,17 +249,18 @@ def save_scrap_profile(
     min_rating: float,
     require_website: str,
     max_scrolls: int,
+    auto_import: bool = True,
 ) -> int:
     """Guarda un perfil de scraping. Retorna el id creado."""
     conn = get_conn()
     conn.execute("""
         INSERT INTO scrap_profiles
-            (nombre, search_query, ciudades, min_reviews, min_rating, require_website, max_scrolls)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+            (nombre, search_query, ciudades, min_reviews, min_rating,
+             require_website, max_scrolls, auto_import)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, (nombre, search_query, json.dumps(ciudades, ensure_ascii=False),
-          min_reviews, min_rating, require_website, max_scrolls))
+          min_reviews, min_rating, require_website, max_scrolls, int(auto_import)))
     conn.commit()
-    # Obtener el id del último insertado
     row = conn.execute("SELECT id FROM scrap_profiles ORDER BY id DESC LIMIT 1").fetchone()
     conn.close()
     return row[0] if row else -1
@@ -292,16 +304,18 @@ def update_scrap_profile(
     min_rating: float,
     require_website: str,
     max_scrolls: int,
+    auto_import: bool = True,
 ):
     """Actualiza un perfil existente."""
     conn = get_conn()
     conn.execute("""
         UPDATE scrap_profiles
         SET nombre=?, search_query=?, ciudades=?, min_reviews=?,
-            min_rating=?, require_website=?, max_scrolls=?
+            min_rating=?, require_website=?, max_scrolls=?, auto_import=?
         WHERE id=?
     """, (nombre, search_query, json.dumps(ciudades, ensure_ascii=False),
-          min_reviews, min_rating, require_website, max_scrolls, profile_id))
+          min_reviews, min_rating, require_website, max_scrolls,
+          int(auto_import), profile_id))
     conn.commit()
     conn.close()
 
