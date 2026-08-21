@@ -188,6 +188,54 @@ def clear_all_leads() -> int:
     return count
 
 
+def get_leads_to_enrich(limit: int | None = None) -> list[dict]:
+    """
+    Leads con web pero sin ningún dato de enriquecimiento.
+
+    Se usa cuando el enricher corre en cloud sin `leads_raw.json` en disco
+    (modo 'enricher' suelto en GitHub Actions, que arranca de checkout limpio).
+    """
+    conn = get_conn()
+    sql = """
+        SELECT id, nombre, ciudad, direccion, telefono, url,
+               puntuacion, resenas, director, email_directo,
+               email_generico, sociedad
+          FROM leads
+         WHERE url != ''
+           AND director = ''
+           AND email_directo = ''
+           AND email_generico = ''
+         ORDER BY puntuacion DESC, resenas DESC
+    """
+    if limit:
+        sql += f" LIMIT {int(limit)}"
+    rows = conn.execute(sql).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def update_lead_enrichment(
+    lead_id: int,
+    director: str,
+    email_directo: str,
+    email_generico: str,
+    sociedad: str,
+):
+    """Guarda el resultado del enriquecimiento de un lead."""
+    conn = get_conn()
+    conn.execute(
+        """
+        UPDATE leads
+           SET director = ?, email_directo = ?, email_generico = ?,
+               sociedad = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?
+        """,
+        (director, email_directo, email_generico, sociedad, lead_id),
+    )
+    conn.commit()
+    conn.close()
+
+
 def update_lead_stage(lead_id: int, new_stage: str):
     """Mueve un lead a otra etapa del pipeline."""
     conn = get_conn()

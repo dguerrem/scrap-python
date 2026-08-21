@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import csv
+import os
 import re
 import random
 import logging
@@ -418,9 +419,80 @@ def save_enriched(leads: list, run_id: str | None = None):
         log.info(f"Copia run guardada: {ts_json}")
 
 
+def _new_browser_page(p, headless: bool):
+    """Crea contexto y página con user-agent aleatorio y locale español."""
+    browser = p.chromium.launch(headless=headless)
+    context = browser.new_context(
+        user_agent=random.choice(USER_AGENTS),
+        viewport={"width": 1280, "height": 900},
+        locale="es-ES",
+    )
+    return browser, context, context.new_page()
+
+
+def _run_from_db(limit: int | None = None, headless: bool = False) -> list:
+    """
+    Enriquece leyendo los leads de la BD y escribiendo el resultado de vuelta.
+
+    Camino usado en cloud cuando no existe `leads_raw.json` (modo 'enricher'
+    suelto). Cada lead se guarda nada más procesarlo, así una interrupción
+    no pierde el trabajo ya hecho.
+    """
+    from src.crm.db import get_leads_to_enrich, update_lead_enrichment
+
+    leads = get_leads_to_enrich(limit=limit)
+    if not leads:
+        log.warning("No hay leads pendientes de enriquecer en la BD.")
+        return []
+
+    log.info(f"Enriqueciendo {len(leads)} leads desde la BD")
+
+    with sync_playwright() as p:
+        browser, context, page = _new_browser_page(p, headless)
+
+        for i, lead in enumerate(leads):
+            # Log sin datos personales: los logs de Actions son públicos
+            log.info(f"  [{i + 1}/{len(leads)}] lead #{lead['id']}")
+            try:
+                enrich_lead(page, lead)
+                update_lead_enrichment(
+                    lead["id"],
+                    lead.get("director", ""),
+                    lead.get("email_directo", ""),
+                    lead.get("email_generico", ""),
+                    lead.get("sociedad", ""),
+                )
+            except Exception as e:
+                log.warning(f"    Error procesando lead #{lead['id']}: {e}")
+            time.sleep(random.uniform(*DELAY_BETWEEN_SITES))
+
+        context.close()
+        browser.close()
+
+    con_director = sum(1 for l in leads if l.get("director"))
+    con_directo = sum(1 for l in leads if l.get("email_directo"))
+    con_generico = sum(1 for l in leads if l.get("email_generico"))
+
+    log.info(f"\n{'=' * 50}")
+    log.info("RESUMEN ENRIQUECIMIENTO (BD)")
+    log.info(f"{'=' * 50}")
+    log.info(f"Total procesados:     {len(leads)}")
+    log.info(f"Con director:         {con_director}")
+    log.info(f"Con email directo:    {con_directo}")
+    log.info(f"Con email genérico:   {con_generico}")
+
+    return leads
+
+
 def run(limit: int | None = None, headless: bool = False, run_id: str | None = None):
     """
     Ejecuta el enriquecimiento sobre los leads de Fase 1.
+
+    Fuente de datos:
+      · Si existe `data/leads_raw.json` → se usa (local y modo 'pipeline' en
+        cloud, donde el scraper acaba de generarlo con los leads frescos).
+      · Si no existe y hay Turso configurado → se leen de la BD (modo
+        'enricher' suelto en Actions, que arranca de checkout limpio).
 
     Args:
         limit:    Número máximo de leads a enriquecer (None = todos)
@@ -430,6 +502,8 @@ def run(limit: int | None = None, headless: bool = False, run_id: str | None = N
     # Cargar leads de Fase 1
     json_path = DATA_DIR / "leads_raw.json"
     if not json_path.exists():
+        if os.environ.get("TURSO_DATABASE_URL"):
+            return _run_from_db(limit=limit, headless=headless)
         log.error(f"No se encontró {json_path}. Ejecuta primero la Fase 1 (run_scraper.py).")
         return []
 
@@ -443,13 +517,7 @@ def run(limit: int | None = None, headless: bool = False, run_id: str | None = N
     log.info(f"Modo: {'headless' if headless else 'visible (verás el navegador)'}")
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=headless)
-        context = browser.new_context(
-            user_agent=random.choice(USER_AGENTS),
-            viewport={"width": 1280, "height": 900},
-            locale="es-ES",
-        )
-        page = context.new_page()
+        browser, context, page = _new_browser_page(p, headless)
 
         for i, lead in enumerate(leads):
             log.info(f"\n  [{i + 1}/{len(leads)}] {lead['nombre']}")
