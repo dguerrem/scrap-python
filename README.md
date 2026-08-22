@@ -216,18 +216,28 @@ Si un lead tiene una `etapa` fuera de `PIPELINE_STAGES` (por ejemplo los valores
 
 ---
 
-### 🐛 BUG-3 · Criterio de deduplicación incoherente
+### ✅ BUG-3 · Criterio de deduplicación incoherente — **RESUELTO**
 
-**Archivos:** `src/models/lead.py` vs `src/crm/db.py`
+**Archivos:** `src/models/lead.py`, `src/crm/db.py`
 
-| Punto | Clave de dedup |
+| Punto | Clave de dedup (antes) |
 | ----- | -------------- |
 | `Lead.dedup_key` (scraper) | `nombre + direccion` |
 | `import_leads()` (BD) | `nombre + ciudad` |
 
-Una cadena con varias sedes en la misma ciudad (mismo nombre, distinta dirección) **pasa el filtro del scraper pero se descarta al importar**. Se pierden leads válidos de forma silenciosa.
+Una cadena con varias sedes en la misma ciudad (mismo nombre, distinta dirección) **pasaba el filtro del scraper pero se descartaba al importar**. Se perdían leads válidos de forma silenciosa.
 
-**Fix:** unificar la clave a `nombre + direccion` en ambos puntos y crear el índice correspondiente en BD.
+**Medido sobre los datos reales del proyecto:** de 311 leads, **3 se perdían** en cada import (Clínicas Origen en Madrid y en Málaga, Somos Psicología en Madrid). Un ~1 % de fuga permanente y creciente conforme se amplían ciudades.
+
+**Fix aplicado:**
+1. `make_dedup_key()` en `models/lead.py`, **única fuente de verdad** para scraper y BD. Usa `nombre + direccion`, y recurre a `nombre + ciudad` solo si la dirección viene vacía (si no, todos los leads sin dirección colapsarían en una sola clave).
+2. Normalización previa: se neutralizan mayúsculas, espacios dobles y **los glifos de icono del área de uso privado de Unicode** que Google Maps antepone a la dirección (`\ue0c8\n`). Sin esto la misma clínica generaba claves distintas entre ejecuciones.
+3. Columna `dedup_key` en `leads` con **índice único parcial** (`WHERE dedup_key != ''`): la BD ya no admite duplicados ni por inserción manual. Es parcial para que una inserción a mano sin clave no reviente; el backfill se la calcula al arrancar.
+4. `backfill_dedup_keys()` migra las BD existentes en una sola pasada. Al colapsar un duplicado conserva **la fila con más información útil** (notas > etapa avanzada > email directo > genérico > director), no la primera.
+5. `import_leads()` deduplica también **dentro del propio lote** y descarta leads sin nombre.
+6. Los textos se guardan ya limpios, así que la dirección deja de mostrarse con el glifo basura en la UI.
+
+**Test:** `python tests/test_bug3.py` — 11 bloques, incluida una migración simulada de BD antigua y una importación real de los 311 leads.
 
 **Severidad:** Media — pérdida silenciosa de leads cualificados.
 
@@ -447,7 +457,7 @@ fugas de datos descritas en [Riesgos y sostenibilidad](#riesgos-y-sostenibilidad
 | Tarea | Ref. | Archivos |
 | ----- | ---- | -------- |
 | ~~Índice seguro de etapa + normalización en import~~ ✅ **hecho** | BUG-2 | `app.py`, `db.py`, `lead.py` |
-| Unificar clave de dedup a `nombre + direccion` | BUG-3 | `lead.py`, `db.py` |
+| ~~Unificar clave de dedup a `nombre + direccion`~~ ✅ **hecho** | BUG-3 | `lead.py`, `db.py` |
 | Guardado explícito de notas | BUG-4 | `app.py` |
 | ~~Enricher desde BD cuando hay Turso~~ ✅ **hecho** (`f1fc0f2`) | BUG-1 | `enricher.py`, `db.py` |
 | Calidad del lead basada en email, no en director | — | `app.py` |
@@ -457,7 +467,7 @@ fugas de datos descritas en [Riesgos y sostenibilidad](#riesgos-y-sostenibilidad
 
 **Test de validación:**
 - ~~Insertar un lead con `etapa = "Scraped"` → la app no cae y el lead aparece en `Nuevo`.~~ ✅ **validado** (`python tests/test_bug2.py`)
-- Importar dos clínicas con mismo nombre y ciudad pero distinta dirección → entran las dos.
+- ~~Importar dos clínicas con mismo nombre y ciudad pero distinta dirección → entran las dos.~~ ✅ **validado** (`python tests/test_bug3.py`)
 - Editar notas y recargar → un solo `UPDATE`, el texto persiste.
 - ~~Lanzar modo `enricher` en cloud → enriquece leads reales de Turso.~~ ✅ **validado**
 - Revisar el log público de un run → **no aparece ningún nombre, email ni director**.

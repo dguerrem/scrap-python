@@ -10,6 +10,8 @@ import os
 import sqlite3
 from pathlib import Path
 
+from src.models.lead import clean_text, make_dedup_key
+
 DB_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "crm.db"
 
 # Estados del pipeline de ventas (columnas del Kanban)
@@ -123,12 +125,19 @@ def init_db():
     for stmt in [
         "ALTER TABLE leads ADD COLUMN perfil_origen TEXT DEFAULT ''",
         "ALTER TABLE scrap_profiles ADD COLUMN auto_import INTEGER DEFAULT 1",
+        "ALTER TABLE leads ADD COLUMN dedup_key TEXT DEFAULT ''",
+        # Índice parcial: las filas con clave vacía quedan fuera, para que una
+        # inserción manual sin dedup_key no reviente. backfill_dedup_keys() se
+        # la calculará en el siguiente arranque.
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_dedup_key "
+        "ON leads(dedup_key) WHERE dedup_key != ''",
     ]:
         try:
             conn.execute(stmt)
         except Exception:
             pass  # columna ya existe
     repair_invalid_stages(conn)
+    backfill_dedup_keys(conn)
     conn.commit()
     conn.close()
 
@@ -168,57 +177,158 @@ def repair_invalid_stages(conn=None) -> int:
     return len(rows)
 
 
+def _lead_richness(row) -> tuple:
+    """
+    Puntúa cuánta información útil tiene una fila, para decidir cuál conservar
+    al colapsar duplicados. Mayor es mejor; el id bajo desempata.
+    """
+    score = 0
+    if (row["notas"] or "").strip():
+        score += 8          # el trabajo manual es lo más caro de recuperar
+    if normalize_stage(row["etapa"]) != PIPELINE_STAGES[0]:
+        score += 4          # ya avanzó en el pipeline
+    if (row["email_directo"] or "").strip():
+        score += 2
+    if (row["email_generico"] or "").strip():
+        score += 1
+    if (row["director"] or "").strip():
+        score += 1
+    return (score, -row["id"])
+
+
+def backfill_dedup_keys(conn=None) -> dict:
+    """
+    Migra la columna `dedup_key`: calcula las claves que falten y colapsa las
+    filas que resulten duplicadas bajo el nuevo criterio.
+
+    Se hace en una sola pasada y **se borran los duplicados antes de escribir
+    las claves**, porque el índice único rechazaría el segundo UPDATE de un
+    par duplicado. De cada grupo sobrevive la fila con más información útil
+    (ver `_lead_richness`).
+
+    Idempotente y barata: si no hay ninguna clave pendiente, no lee la tabla
+    entera ni escribe nada. Retorna un resumen del trabajo hecho.
+    """
+    own_conn = conn is None
+    conn = conn or get_conn()
+    resumen = {"claves": 0, "duplicados": 0}
+
+    try:
+        pendientes = conn.execute(
+            "SELECT COUNT(*) FROM leads WHERE dedup_key IS NULL OR dedup_key = ''"
+        ).fetchone()[0]
+    except Exception:
+        # La tabla o la columna pueden no existir todavía en el primer arranque
+        if own_conn:
+            conn.close()
+        return resumen
+
+    if not pendientes:
+        if own_conn:
+            conn.close()
+        return resumen
+
+    filas = conn.execute(
+        "SELECT id, nombre, ciudad, direccion, dedup_key, notas, etapa, "
+        "       email_directo, email_generico, director "
+        "  FROM leads ORDER BY id"
+    ).fetchall()
+
+    grupos = {}
+    objetivo = {}
+    for r in filas:
+        key = r["dedup_key"] or make_dedup_key(r["nombre"], r["ciudad"], r["direccion"])
+        objetivo[r["id"]] = key
+        grupos.setdefault(key, []).append(r)
+
+    borrar, actualizar = [], []
+    for key, miembros in grupos.items():
+        if len(miembros) > 1:
+            mejor = max(miembros, key=_lead_richness)
+            borrar += [r["id"] for r in miembros if r["id"] != mejor["id"]]
+            miembros = [mejor]
+        for r in miembros:
+            if (r["dedup_key"] or "") != key:
+                actualizar.append((key, r["id"]))
+
+    if borrar:
+        conn.executemany("DELETE FROM leads WHERE id = ?", [(i,) for i in borrar])
+        conn.commit()
+        resumen["duplicados"] = len(borrar)
+
+    if actualizar:
+        conn.executemany("UPDATE leads SET dedup_key = ? WHERE id = ?", actualizar)
+        conn.commit()
+        resumen["claves"] = len(actualizar)
+
+    if own_conn:
+        conn.close()
+    return resumen
+
+
 def import_leads(leads: list[dict], perfil_origen: str = "") -> int:
     """
     Importa una lista de leads (dicts).
-    Salta duplicados (mismo nombre + ciudad).
-    Retorna el número de leads importados.
+
+    Salta los que ya existan según `make_dedup_key()` (nombre + dirección, o
+    nombre + ciudad si no hay dirección) y también los repetidos dentro del
+    propio lote. Retorna el número de leads realmente insertados.
     """
-    conn = get_conn()
     init_db()
+    conn = get_conn()
 
-    existing = conn.execute("SELECT nombre, ciudad FROM leads").fetchall()
-    existing_keys = {(r["nombre"], r["ciudad"]) for r in existing}
+    existing_keys = {
+        r["dedup_key"] for r in conn.execute("SELECT dedup_key FROM leads")
+    }
 
-    new_leads = [
-        l for l in leads
-        if (l["nombre"], l["ciudad"]) not in existing_keys
-    ]
+    new_leads = []
+    for l in leads:
+        nombre = clean_text(l.get("nombre", ""))
+        if not nombre:
+            continue  # sin nombre no hay lead
+        key = make_dedup_key(nombre, l.get("ciudad", ""), l.get("direccion", ""))
+        if key in existing_keys:
+            continue
+        existing_keys.add(key)  # evita duplicados dentro del mismo lote
+        new_leads.append((l, nombre, key))
 
     if not new_leads:
         conn.close()
         return 0
 
     sql = """
-        INSERT INTO leads (nombre, ciudad, direccion, telefono, url,
+        INSERT OR IGNORE INTO leads (nombre, ciudad, direccion, telefono, url,
                          puntuacion, resenas, director, email_directo,
-                         email_generico, sociedad, etapa, perfil_origen)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         email_generico, sociedad, etapa, perfil_origen, dedup_key)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """
 
     params_list = [
         (
-            l.get("nombre", ""),
-            l.get("ciudad", ""),
-            l.get("direccion", "").strip(),
-            l.get("telefono", "").strip(),
+            nombre,
+            clean_text(l.get("ciudad", "")),
+            clean_text(l.get("direccion", "")),
+            clean_text(l.get("telefono", "")),
             l.get("url", ""),
             l.get("puntuacion", 0),
             l.get("resenas", 0),
-            l.get("director", ""),
+            clean_text(l.get("director", "")),
             l.get("email_directo", ""),
             l.get("email_generico", ""),
-            l.get("sociedad", ""),
+            clean_text(l.get("sociedad", "")),
             normalize_stage(l.get("etapa")),
             perfil_origen,
+            key,
         )
-        for l in new_leads
+        for l, nombre, key in new_leads
     ]
 
+    antes = conn.execute("SELECT COUNT(*) FROM leads").fetchone()[0]
     conn.executemany(sql, params_list)
     conn.commit()
+    despues = conn.execute("SELECT COUNT(*) FROM leads").fetchone()[0]
     conn.close()
-    return len(new_leads)
+    return despues - antes
 
 
 def import_from_json(json_path: str | Path, perfil_origen: str = "") -> int:
