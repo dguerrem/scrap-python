@@ -184,11 +184,14 @@ Auditoría del código actual. **Los cuatro están corregidos y verificados.**
 | BUG-2 | Una etapa inválida tumbaba la app entera | ✅ `tests/test_bug2.py` |
 | BUG-3 | Se perdían 3 de 311 leads en cada import | ✅ `tests/test_bug3.py` |
 | BUG-4 | Notas y etapas se sobrescribían entre leads | ✅ `tests/test_bug4.py` |
+| RIESGO-A | Los logs públicos exponían nombres y emails | ✅ `tests/test_fase4_riesgos.py` |
+| RIESGO-B | Los artifacts los descargaba cualquiera | ✅ `tests/test_fase4_riesgos.py` |
+| RIESGO-D | Un scraping bloqueado terminaba en verde | ✅ `tests/test_fase4_riesgos.py` |
 
 Los tests se ejecutan sobre una BD SQLite temporal y **no tocan Turso ni la BD local**:
 
 ```bash
-python tests/test_bug2.py && python tests/test_bug3.py && python tests/test_bug4.py
+for t in tests/test_*.py; do python "$t" || break; done
 ```
 
 ### ✅ BUG-1 · El modo `enricher` no funciona en cloud — **RESUELTO**
@@ -318,30 +321,57 @@ Estimación con ~500 leads en BD y uso normal del CRM:
 
 El repositorio es público, y eso tiene consecuencias que no son evidentes.
 
-#### RIESGO-A · Los logs de Actions publican datos personales
+#### ✅ RIESGO-A · Los logs de Actions publican datos personales — **RESUELTO**
 
-`maps_scraper.py` y `enricher.py` escriben en el log:
+`maps_scraper.py` y `enricher.py` escribían en el log:
 
 ```python
 log.info(f"  ✓ {nombre} | {rating}★ | {reviews} rev | {city}")
 log.info(f"  ✓ {nombre} — dir={director} | email={email_directo}")
 ```
 
-En un repositorio público **los logs de workflow son legibles por cualquiera**. Ahora mismo se
-publican en internet nombres de clínicas, nombres de directores y sus emails: es la base de datos
+En un repositorio público **los logs de workflow son legibles por cualquiera, sin autenticarse**.
+Se publicaban en internet nombres de clínicas, nombres de directores y sus emails: la base de datos
 comercial regalada, y datos personales tratados sin control.
 
-**Fix (Fase 4):** en CI, loguear solo agregados (`✓ 23 leads cualificados en Madrid`). El detalle
-va únicamente al fichero de salida.
+**Fix aplicado:** módulo `src/scraper/privacy.py` con dos helpers y un filtro de logging.
 
-#### RIESGO-B · Los artifacts son descargables por cualquiera
+| Helper | En local | En CI |
+| ------ | -------- | ----- |
+| `mask(nombre)` | el nombre real | `<8fca98>` — hash corto y estable |
+| `show(email)` | el email real | `sí` / `no` |
 
-`pipeline.yml` sube `leads_raw.json` y `leads_enriched.json` con 30 días de retención. La
+```
+CI      ✓ <8fca98> — dir=sí | email=sí
+LOCAL   ✓ Centro de Psicología Alameda — dir=María López | email=maria@alameda.es
+```
+
+El hash es **estable**, así que dos líneas del mismo lead siguen siendo correlacionables: se puede
+depurar un run sin saber de quién se trata. En local no se oculta nada, que es donde los logs
+sirven para algo.
+
+Como red de seguridad, `RedactEmailsFilter` borra por expresión regular cualquier email del mensaje
+ya formateado. Cubre lo que los helpers no pueden prever: el texto de una excepción de una
+librería de terceros que arrastre una dirección. Se instala en los tres entry points.
+
+#### ✅ RIESGO-B · Los artifacts son descargables por cualquiera — **RESUELTO**
+
+`pipeline.yml` subía `leads_raw.json` y `leads_enriched.json` con 30 días de retención. La
 documentación de GitHub exige *"read access to the repository"* para descargarlos — y en un
 repositorio público **eso lo tiene todo el mundo**.
 
-**Fix (Fase 4):** si `auto_import` está activo los datos ya están en Turso; no subir artifacts.
-Dejarlos solo para el caso `auto_import = 0`.
+**Fix aplicado:** el paso de import decide si hacen falta y lo escribe en `GITHUB_OUTPUT`; la
+subida queda condicionada a esa salida.
+
+| Situación | ¿Se suben artifacts? | Motivo |
+| --------- | -------------------- | ------ |
+| `auto_import` activo y OK | **No** | Los datos ya están en Turso |
+| `auto_import = 0` | Sí, 1 día | Es la única copia |
+| El import a Turso falla | Sí, 1 día | Red de seguridad: mejor exponer que perder |
+
+En los dos casos de excepción se emite un `::warning::` visible en la pestaña del run, y la
+retención baja de 30 días a **1**. En la ruta normal —la del 95 % de los runs— ya no se publica
+nada.
 
 #### RIESGO-C · La app de Streamlit es pública por defecto
 
@@ -387,21 +417,33 @@ provisiona para los clientes, y sin límite de minutos).
 
 | # | Riesgo | Prob. | Impacto | Mitigación |
 | - | ------ | ----- | ------- | ---------- |
-| **D** | **Google Maps sirve CAPTCHA a las IPs de Actions** | Alta | Scraper devuelve 0 leads en silencio | Fallar el workflow si `leads < N` (Fase 4) |
+| **D** | **Google Maps sirve CAPTCHA a las IPs de Actions** | Alta | Scraper devuelve 0 leads en silencio | ✅ `ScraperBlockedError` aborta el run |
 | **E** | **Cron desactivado a los 60 días sin actividad** | Alta | Mailer parado sin aviso | Job semanal de backup (= keepalive) |
 | **F** | **Fallo silencioso del mailer** | Media | Semanas sin contactar a nadie | Heartbeat: alerta si 48 h sin envíos |
 | **G** | Pérdida de la BD en Turso | Baja | Pérdida del `email_ledger` → riesgo de duplicar contactos | Backup semanal |
 | **H** | Suspensión de la cuenta de Google por spam | Baja-Media | Se pierde el correo del negocio | Rampa + tope (ya en Fase 6) |
 | **I** | Streamlit duerme la app a las 12 h sin tráfico | Alta | Arranque en frío al entrar | **No afecta al mailer** (corre en Actions) |
 
-#### Sobre D — el más probable
+#### ✅ Sobre D — el más probable — **RESUELTO**
 
 Los runners de GitHub usan IPs de datacenter de Azure, muy utilizadas por scrapers, y Google las
-trata con desconfianza. El scraper puede empezar a devolver cero resultados **sin lanzar ningún
+trata con desconfianza. El scraper podía empezar a devolver cero resultados **sin lanzar ningún
 error**: `scroll_feed()` no encuentra el feed, registra un warning y continúa. El workflow
-terminaría en verde habiendo extraído nada.
+terminaba en verde habiendo extraído nada.
 
 > Un job en verde que no hizo nada es peor que un job en rojo.
+
+**Fix aplicado:** `scrape_city()` devuelve ahora `(leads, resultados_encontrados)`. Si el total de
+resultados vistos en **todas** las ciudades es cero, `run()` lanza `ScraperBlockedError` y el
+workflow termina en rojo.
+
+La distinción importa: el criterio no es *"no se cualificó ningún lead"* —eso pasa legítimamente
+con filtros estrictos o una ciudad ya agotada— sino *"Google no devolvió ni un solo resultado que
+mirar"*, que solo ocurre si la búsqueda no funcionó. Basta con que **una** ciudad devuelva
+resultados para que el run se considere sano.
+
+El resumen final incluye `Resultados vistos: N`, para poder distinguir de un vistazo un filtro
+demasiado estricto de un bloqueo.
 
 #### Sobre E y F — el fallo silencioso es el enemigo real
 
@@ -489,18 +531,21 @@ fugas de datos descritas en [Riesgos y sostenibilidad](#riesgos-y-sostenibilidad
 | ~~Unificar clave de dedup a `nombre + direccion`~~ ✅ **hecho** | BUG-3 | `lead.py`, `db.py` |
 | ~~Guardado explícito de notas~~ ✅ **hecho** | BUG-4 | `app.py` |
 | ~~Enricher desde BD cuando hay Turso~~ ✅ **hecho** (`f1fc0f2`) | BUG-1 | `enricher.py`, `db.py` |
-| Calidad del lead basada en email, no en director | — | `app.py` |
-| **Sanear logs en CI** (sin nombres, emails ni directores) | RIESGO-A | `maps_scraper.py`, `enricher.py` |
-| **No subir artifacts si `auto_import` está activo** | RIESGO-B | `pipeline.yml` |
-| **Fallar el workflow si el scraper devuelve 0 leads** | RIESGO-D | `pipeline.yml`, `maps_scraper.py` |
+| ~~Calidad del lead basada en email, no en director~~ ✅ **hecho** | — | `app.py` |
+| ~~**Sanear logs en CI**~~ ✅ **hecho** | RIESGO-A | `privacy.py`, `maps_scraper.py`, `enricher.py`, entry points |
+| ~~**No subir artifacts si `auto_import` está activo**~~ ✅ **hecho** | RIESGO-B | `pipeline.yml` |
+| ~~**Fallar el workflow si el scraper devuelve 0 leads**~~ ✅ **hecho** | RIESGO-D | `maps_scraper.py` |
 
 **Test de validación:**
 - ~~Insertar un lead con `etapa = "Scraped"` → la app no cae y el lead aparece en `Nuevo`.~~ ✅ **validado** (`python tests/test_bug2.py`)
 - ~~Importar dos clínicas con mismo nombre y ciudad pero distinta dirección → entran las dos.~~ ✅ **validado** (`python tests/test_bug3.py`)
 - ~~Editar notas y recargar → un solo `UPDATE`, el texto persiste.~~ ✅ **validado** (`python tests/test_bug4.py`)
 - ~~Lanzar modo `enricher` en cloud → enriquece leads reales de Turso.~~ ✅ **validado**
-- Revisar el log público de un run → **no aparece ningún nombre, email ni director**.
-- Forzar un scraping que no encuentre resultados → el workflow termina en **rojo**, no en verde.
+- ~~Revisar el log público de un run → **no aparece ningún nombre, email ni director**.~~ ✅ **validado** (`python tests/test_fase4_riesgos.py`)
+- ~~Forzar un scraping que no encuentre resultados → el workflow termina en **rojo**, no en verde.~~ ✅ **validado**
+
+> **Fase 4 completada.** Los 4 bugs y los 3 riesgos de exposición están cerrados y cubiertos por
+> tests. Falta únicamente confirmar RIESGO-A y RIESGO-B **en un run real** de Actions.
 
 ---
 

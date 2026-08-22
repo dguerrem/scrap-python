@@ -24,6 +24,7 @@ from playwright.sync_api import sync_playwright, Page
 
 from src.scraper.config import USER_AGENTS
 from src.models.lead import Lead
+from src.scraper.privacy import mask, show
 
 log = logging.getLogger("enricher")
 
@@ -322,7 +323,7 @@ def enrich_lead(page: Page, lead_data: dict) -> dict:
     nombre = lead_data.get("nombre", "")
 
     if not url:
-        log.info(f"  ✗ {nombre} — sin URL")
+        log.info(f"  ✗ {mask(nombre)} — sin URL")
         return lead_data
 
     # Extraer dominio para priorizar emails
@@ -337,7 +338,7 @@ def enrich_lead(page: Page, lead_data: dict) -> dict:
         page.goto(url, wait_until="domcontentloaded", timeout=PAGE_TIMEOUT)
         page.wait_for_timeout(2000)
     except Exception as e:
-        log.info(f"  ✗ {nombre} — error cargando web: {e}")
+        log.info(f"  ✗ {mask(nombre)} — error cargando web: {e}")
         return lead_data
 
     # --- Extraer emails del HTML completo ---
@@ -363,18 +364,18 @@ def enrich_lead(page: Page, lead_data: dict) -> dict:
 
     if has_director or has_email:
         lead_data["estado"] = "Enriched"
-        parts = []
-        if lead_data.get("director"):
-            parts.append(f"dir={lead_data['director']}")
+        parts = [f"dir={show(lead_data.get('director'))}"]
         if lead_data.get("email_directo"):
-            parts.append(f"email={lead_data['email_directo']}")
+            parts.append(f"email={show(lead_data['email_directo'])}")
         elif lead_data.get("email_generico"):
-            parts.append(f"email_gen={lead_data['email_generico']}")
+            parts.append(f"email_gen={show(lead_data['email_generico'])}")
+        else:
+            parts.append("email=no")
         if lead_data.get("sociedad"):
-            parts.append(f"soc={lead_data['sociedad']}")
-        log.info(f"  ✓ {nombre} — {' | '.join(parts)}")
+            parts.append(f"soc={mask(lead_data['sociedad'])}")
+        log.info(f"  ✓ {mask(nombre)} — {' | '.join(parts)}")
     else:
-        log.info(f"  ○ {nombre} — sin datos de enriquecimiento")
+        log.info(f"  ○ {mask(nombre)} — sin datos de enriquecimiento")
 
     return lead_data
 
@@ -520,7 +521,7 @@ def run(limit: int | None = None, headless: bool = False, run_id: str | None = N
         browser, context, page = _new_browser_page(p, headless)
 
         for i, lead in enumerate(leads):
-            log.info(f"\n  [{i + 1}/{len(leads)}] {lead['nombre']}")
+            log.info(f"\n  [{i + 1}/{len(leads)}] {mask(lead['nombre'])}")
 
             # Asegurar campos nuevos existen
             lead.setdefault("director", "")

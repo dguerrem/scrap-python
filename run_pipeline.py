@@ -12,12 +12,14 @@ Uso:
 import argparse
 import logging
 import time
+from src.scraper.privacy import install_log_redaction
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)-7s  %(message)s",
     datefmt="%H:%M:%S",
 )
+install_log_redaction()  # el repo es público: nada de datos personales en CI
 log = logging.getLogger("pipeline")
 
 

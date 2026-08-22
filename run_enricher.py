@@ -13,12 +13,14 @@ import argparse
 import logging
 
 from src.scraper.enricher import run
+from src.scraper.privacy import install_log_redaction
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)-7s  %(message)s",
     datefmt="%H:%M:%S",
 )
+install_log_redaction()  # el repo es público: nada de datos personales en CI
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fase 2: Enriquecer leads con web scraping")

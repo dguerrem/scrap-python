@@ -12,6 +12,7 @@ import argparse
 import logging
 
 from src.scraper.maps_scraper import run
+from src.scraper.privacy import install_log_redaction
 
 
 def main():
@@ -43,6 +44,7 @@ def main():
         format="%(asctime)s [%(levelname)s] %(message)s",
         datefmt="%H:%M:%S",
     )
+    install_log_redaction()  # el repo es público: nada de datos personales en CI
 
     # Parsear ciudades si se pasaron por argumento
     cities = None

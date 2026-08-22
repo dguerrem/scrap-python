@@ -36,8 +36,13 @@ from src.scraper.config import (
     USER_AGENTS,
 )
 from src.models.lead import Lead
+from src.scraper.privacy import mask
 
 log = logging.getLogger("maps_scraper")
+
+
+class ScraperBlockedError(RuntimeError):
+    """Google Maps no devolvió ningún resultado: bloqueo, CAPTCHA o cambio de DOM."""
 
 # Carpeta donde se guardan los datos (scrap-python/data/)
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
@@ -253,22 +258,22 @@ def extract_lead(
     # --- Filtro: Puntuación ---
     rating = _get_rating(page)
     if rating < min_rating:
-        log.info(f"  ✗ {nombre} — rating {rating} (mín: {min_rating})")
+        log.info(f"  ✗ {mask(nombre)} — rating {rating} (mín: {min_rating})")
         return None
 
     # --- Filtro: Reseñas ---
     reviews = _get_reviews(page)
     if reviews < min_reviews:
-        log.info(f"  ✗ {nombre} — {reviews} reseñas (mín: {min_reviews})")
+        log.info(f"  ✗ {mask(nombre)} — {reviews} reseñas (mín: {min_reviews})")
         return None
 
     # --- Filtro: Sitio web ---
     website = _get_website(page)
     if require_website == "required" and not website:
-        log.info(f"  ✗ {nombre} — sin página web")
+        log.info(f"  ✗ {mask(nombre)} — sin página web")
         return None
     elif require_website == "none" and website:
-        log.info(f"  ✗ {nombre} — tiene web (filtro: solo sin web)")
+        log.info(f"  ✗ {mask(nombre)} — tiene web (filtro: solo sin web)")
         return None
     # require_website == 'any' → no filter
 
@@ -285,7 +290,7 @@ def extract_lead(
         puntuacion=rating,
         resenas=reviews,
     )
-    log.info(f"  ✓ {nombre} | {rating}★ | {reviews} rev | {city}")
+    log.info(f"  ✓ {mask(nombre)} | {rating}★ | {reviews} rev | {city}")
     return lead
 
 
@@ -301,6 +306,10 @@ def scrape_city(
     """
     Ejecuta el scraping completo para una ciudad:
     buscar → scroll → recopilar URLs → extraer datos de cada una.
+
+    Retorna (leads_cualificados, resultados_encontrados). El segundo valor
+    permite distinguir "no hay clínicas que cumplan los filtros" de
+    "Google no nos ha devuelto nada" (ver ScraperBlockedError).
     """
     query = search_query.format(city=city)
     url = f"https://www.google.com/maps/search/{quote_plus(query)}/"
@@ -331,7 +340,7 @@ def scrape_city(
         _sleep(DELAY_BETWEEN_RESULTS)
 
     log.info(f"  → {city}: {len(leads)} leads cualificados de {len(place_urls)} resultados")
-    return leads
+    return leads, len(place_urls)
 
 
 # ==============================================================
@@ -462,6 +471,8 @@ def run(cities: list | None = None, headless: bool = False, profile: dict | None
     log.info(f"Modo: {'headless' if headless else 'visible (verás el navegador)'}")
 
     new_leads = []
+    resultados_totales = 0
+    ciudades_con_error = 0
 
     with sync_playwright() as p:
         # Lanzar navegador Chromium
@@ -479,20 +490,33 @@ def run(cities: list | None = None, headless: bool = False, profile: dict | None
 
         for city in targets:
             try:
-                city_leads = scrape_city(page, city, search_query, min_rating, min_reviews, require_website, max_scrolls)
+                city_leads, n_resultados = scrape_city(page, city, search_query, min_rating, min_reviews, require_website, max_scrolls)
+                resultados_totales += n_resultados
                 # Filtrar los que ya existen
                 for lead in city_leads:
                     if lead.dedup_key not in existing_keys:
                         new_leads.append(lead)
                         existing_keys.add(lead.dedup_key)
                     else:
-                        log.info(f"  ⊘ {lead.nombre} — ya existe, saltando")
+                        log.info(f"  ⊘ {mask(lead.nombre)} — ya existe, saltando")
             except Exception as e:
+                ciudades_con_error += 1
                 log.error(f"Error en {city}: {e}")
             _sleep(DELAY_BETWEEN_SEARCHES)
 
         context.close()
         browser.close()
+
+    # Google no ha devuelto ni un solo resultado en ninguna ciudad. No es que
+    # los filtros sean estrictos: es que la búsqueda no ha funcionado (CAPTCHA
+    # a la IP del runner, cambio de maquetación o bloqueo). Sin esto el run
+    # terminaba en verde con cero leads y no había forma de enterarse.
+    if resultados_totales == 0:
+        raise ScraperBlockedError(
+            f"Google Maps no devolvió resultados en ninguna de las {len(targets)} "
+            f"ciudades ({ciudades_con_error} con error). Causa probable: CAPTCHA "
+            f"a la IP del runner o cambio en la maquetación de Maps."
+        )
 
     # Combinar existentes + nuevos y guardar
     all_leads = existing + deduplicate(new_leads)
@@ -505,6 +529,7 @@ def run(cities: list | None = None, headless: bool = False, profile: dict | None
     log.info(f"Leads previos:     {len(existing)}")
     log.info(f"Leads nuevos:      {len(new_leads)}")
     log.info(f"Total acumulado:   {len(all_leads)}")
+    log.info(f"Resultados vistos: {resultados_totales}")
     for city in targets:
         n = sum(1 for lead in all_leads if lead.ciudad == city)
         if n:

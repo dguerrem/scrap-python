@@ -73,11 +73,11 @@ jobs:
           fi
 
       - name: Auto-import leads to Turso
+        id: import
         if: always()
         run: |
-          python -c "
-          import json
-          from src.crm.db import import_from_json
+          python - <<'EOF'
+          import json, os
           from pathlib import Path
 
           # Leer perfil para saber si auto_import está activo
@@ -89,24 +89,44 @@ jobs:
           auto_import = profile.get('auto_import', 1)
           nombre = profile.get('nombre', 'Manual')
 
-          if not auto_import:
-              print(f'Auto-import desactivado para perfil: {nombre}')
-              print('Los leads quedan como artifacts para importar manualmente.')
-          else:
-              enriched = Path('data/leads_enriched.json')
-              raw = Path('data/leads_raw.json')
-              if enriched.exists():
-                  n = import_from_json(enriched, perfil_origen=nombre)
-                  print(f'Imported {n} enriched leads to Turso (perfil: {nombre})')
-              elif raw.exists():
-                  n = import_from_json(raw, perfil_origen=nombre)
-                  print(f'Imported {n} raw leads to Turso (perfil: {nombre})')
-              else:
-                  print('No lead files found to import')
-          "
+          # Los artifacts de un repo público los descarga cualquiera. Sólo se
+          # suben cuando son la única copia de los datos (ver RIESGO-B).
+          upload = 'no'
 
-      - name: Upload artifacts
-        if: always()
+          try:
+              if not auto_import:
+                  print(f'Auto-import desactivado para perfil: {nombre}')
+                  print('Los leads quedan como artifacts para importar manualmente.')
+                  upload = 'yes'
+              else:
+                  from src.crm.db import import_from_json
+                  enriched = Path('data/leads_enriched.json')
+                  raw = Path('data/leads_raw.json')
+                  if enriched.exists():
+                      n = import_from_json(enriched, perfil_origen=nombre)
+                      print(f'Imported {n} enriched leads to Turso (perfil: {nombre})')
+                  elif raw.exists():
+                      n = import_from_json(raw, perfil_origen=nombre)
+                      print(f'Imported {n} raw leads to Turso (perfil: {nombre})')
+                  else:
+                      print('No lead files found to import')
+          except Exception as e:
+              print(f'ERROR importando a Turso: {type(e).__name__}: {e}')
+              print('Se subiran artifacts como copia de seguridad.')
+              upload = 'yes'
+
+          if upload == 'yes':
+              print('::warning::Se van a publicar artifacts con datos de contacto. '
+                    'Descargalos e importalos, y borra el artifact al terminar.')
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f'upload={upload}\n')
+          EOF
+
+      # Sólo si los datos NO han llegado a Turso. En la ruta normal la copia
+      # vive en la base de datos y no hace falta publicar nada.
+      - name: Upload artifacts (solo si no se importaron)
+        if: always() && steps.import.outputs.upload == 'yes'
         uses: actions/upload-artifact@v4
         with:
           name: leads-${{ github.run_number }}
@@ -117,4 +137,4 @@ jobs:
             data/leads_enriched.csv
             data/runs/
           if-no-files-found: ignore
-          retention-days: 30
+          retention-days: 1

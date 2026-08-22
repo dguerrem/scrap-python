@@ -207,20 +207,16 @@ with tab_kanban:
             st.subheader(f"{stage} ({len(leads)})")
 
             for lead in leads:
-                # Determinar color del borde según datos disponibles
-                has_direct = bool(lead["email_directo"])
-                has_generic = bool(lead["email_generico"])
-                has_director = bool(lead["director"])
-
-                # Icono de calidad del lead
-                if has_direct and has_director:
-                    quality = "🟢"  # Mejor: email directo + nombre
-                elif has_direct or has_director:
-                    quality = "🟡"  # Bueno: tiene algo personal
-                elif has_generic:
-                    quality = "🟠"  # Aceptable: solo email genérico
+                # Calidad del lead = ¿puedo escribirle, y a quién llega?
+                # El director NO puntúa: su tasa de acierto es baja y a veces
+                # devuelve el propio nombre de la clínica. El email es lo único
+                # que determina si el lead es utilizable.
+                if lead["email_directo"]:
+                    quality = "🟢"  # Email directo: llega a alguien con criterio
+                elif lead["email_generico"]:
+                    quality = "🟡"  # Sólo info@: contactable, pero menos directo
                 else:
-                    quality = "🔴"  # Sin datos de contacto
+                    quality = "🔴"  # Sin email: inservible para el envío
 
                 with st.expander(f"{quality} {lead['nombre'][:30]}"):
                     st.caption(f"📍 {lead['ciudad']} · ⭐ {lead['puntuacion']} · 💬 {lead['resenas']}")
