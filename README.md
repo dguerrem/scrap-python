@@ -176,7 +176,20 @@ scrap-python/
 
 ## Bugs detectados
 
-Auditoría del código actual. Se corrigen en la **Fase 4**.
+Auditoría del código actual. **Los cuatro están corregidos y verificados.**
+
+| Bug | Qué provocaba | Estado |
+| --- | ------------- | ------ |
+| BUG-1 | El modo `enricher` no hacía nada en cloud | ✅ Validado en producción |
+| BUG-2 | Una etapa inválida tumbaba la app entera | ✅ `tests/test_bug2.py` |
+| BUG-3 | Se perdían 3 de 311 leads en cada import | ✅ `tests/test_bug3.py` |
+| BUG-4 | Notas y etapas se sobrescribían entre leads | ✅ `tests/test_bug4.py` |
+
+Los tests se ejecutan sobre una BD SQLite temporal y **no tocan Turso ni la BD local**:
+
+```bash
+python tests/test_bug2.py && python tests/test_bug3.py && python tests/test_bug4.py
+```
 
 ### ✅ BUG-1 · El modo `enricher` no funciona en cloud — **RESUELTO**
 
@@ -243,20 +256,36 @@ Una cadena con varias sedes en la misma ciudad (mismo nombre, distinta direcció
 
 ---
 
-### 🐛 BUG-4 · Escritura en BD en cada rerun (notas)
+### ✅ BUG-4 · Escritura en BD en cada rerun (notas) — **RESUELTO**
 
-**Archivo:** `src/crm/app.py` (líneas ~242 y ~374)
+**Archivo:** `src/crm/app.py` (tabs Kanban y Detalle)
 
 ```python
 if notas != (lead["notas"] or ""):
     update_lead_notes(lead["id"], notas)
 ```
 
-Streamlit re-ejecuta el script entero en cada interacción. Como la comparación se hace contra el valor cacheado (TTL 300 s), la condición sigue siendo verdadera tras guardar, disparando **un `UPDATE` por cada rerun**. En Turso eso es una petición HTTP por interacción.
+Streamlit re-ejecuta el script entero en cada interacción. Como la comparación se hacía contra el valor cacheado (TTL 300 s), la condición seguía siendo verdadera tras guardar, disparando **un `UPDATE` por cada rerun**. En Turso eso es una petición HTTP por interacción.
 
-**Fix:** guardado explícito con botón, o `st.form`, o comparar contra `st.session_state` en lugar del valor cacheado.
+**Medido con `streamlit.testing`:** tras editar una nota una sola vez y provocar 5 reruns, el código anterior hacía **6 escrituras**; el nuevo hace **1**.
 
-**Severidad:** Media — coste de red y de cuota en Turso.
+**Bug adicional descubierto al escribir el test — corrupción de datos.** Los widgets del tab Detalle usaban claves **fijas** (`"detail_notas"`, `"detail_stage"`) en lugar de una por lead. Streamlit da prioridad a `session_state` sobre el parámetro `value=`, así que al cambiar de lead el recuadro conservaba el texto del anterior y lo **escribía sobre el lead nuevo**. Verificado ejecutando ambas versiones:
+
+```
+CÓDIGO VIEJO   Alfa: 'SECRETO DE ALFA'   Beta: 'SECRETO DE ALFA'   ← sobrescrito
+CÓDIGO NUEVO   Alfa: 'SECRETO DE ALFA'   Beta: ''
+```
+
+Lo mismo ocurría con el selector de etapa: cambiar de lead podía mover al siguiente a la etapa del anterior. Es el bug más grave de los cuatro, porque **destruye trabajo manual en silencio** y no deja rastro.
+
+**Fix aplicado:**
+1. `on_change` con callbacks `_on_notes_change` / `_on_stage_change`: el guardado ocurre una sola vez, justo cuando el valor cambia, en lugar de en cada rerun.
+2. Claves de widget **por lead** (`detail_notas_{id}`, `detail_stage_{id}`), lo que elimina la contaminación entre leads.
+3. Se sustituye el `st.success` permanente por un `st.toast` que sólo aparece al guardar de verdad.
+
+**Test:** `python tests/test_bug4.py` — 8 bloques que levantan la app real con `streamlit.testing.v1.AppTest` y cuentan las escrituras a BD.
+
+**Severidad:** Alta (revisada al alza) — además del coste de cuota, sobrescribía notas y etapas entre leads.
 
 ---
 
@@ -458,7 +487,7 @@ fugas de datos descritas en [Riesgos y sostenibilidad](#riesgos-y-sostenibilidad
 | ----- | ---- | -------- |
 | ~~Índice seguro de etapa + normalización en import~~ ✅ **hecho** | BUG-2 | `app.py`, `db.py`, `lead.py` |
 | ~~Unificar clave de dedup a `nombre + direccion`~~ ✅ **hecho** | BUG-3 | `lead.py`, `db.py` |
-| Guardado explícito de notas | BUG-4 | `app.py` |
+| ~~Guardado explícito de notas~~ ✅ **hecho** | BUG-4 | `app.py` |
 | ~~Enricher desde BD cuando hay Turso~~ ✅ **hecho** (`f1fc0f2`) | BUG-1 | `enricher.py`, `db.py` |
 | Calidad del lead basada en email, no en director | — | `app.py` |
 | **Sanear logs en CI** (sin nombres, emails ni directores) | RIESGO-A | `maps_scraper.py`, `enricher.py` |
@@ -468,7 +497,7 @@ fugas de datos descritas en [Riesgos y sostenibilidad](#riesgos-y-sostenibilidad
 **Test de validación:**
 - ~~Insertar un lead con `etapa = "Scraped"` → la app no cae y el lead aparece en `Nuevo`.~~ ✅ **validado** (`python tests/test_bug2.py`)
 - ~~Importar dos clínicas con mismo nombre y ciudad pero distinta dirección → entran las dos.~~ ✅ **validado** (`python tests/test_bug3.py`)
-- Editar notas y recargar → un solo `UPDATE`, el texto persiste.
+- ~~Editar notas y recargar → un solo `UPDATE`, el texto persiste.~~ ✅ **validado** (`python tests/test_bug4.py`)
 - ~~Lanzar modo `enricher` en cloud → enriquece leads reales de Turso.~~ ✅ **validado**
 - Revisar el log público de un run → **no aparece ningún nombre, email ni director**.
 - Forzar un scraping que no encuentre resultados → el workflow termina en **rojo**, no en verde.

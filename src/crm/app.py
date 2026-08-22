@@ -60,6 +60,24 @@ def _c_get_scrap_profiles():
 def _clear_cache():
     st.cache_data.clear()
 
+
+# ── Guardado explícito: sólo se escribe cuando el usuario cambia algo ──
+# Streamlit re-ejecuta el script entero en cada interacción. Comparar el valor
+# del widget contra el lead cacheado hacía que la condición siguiera siendo
+# cierta tras guardar, disparando un UPDATE por rerun (ver BUG-4). Con
+# on_change el callback corre una sola vez, justo cuando el valor cambia.
+
+def _on_notes_change(lead_id: int, widget_key: str):
+    update_lead_notes(lead_id, st.session_state[widget_key])
+    _clear_cache()
+    st.toast("Notas guardadas", icon="💾")
+
+
+def _on_stage_change(lead_id: int, widget_key: str):
+    update_lead_stage(lead_id, st.session_state[widget_key])
+    _clear_cache()
+    st.toast(f"Movido a {st.session_state[widget_key]}", icon="➡️")
+
 # ======================================================
 # CONFIGURACIÓN DE PÁGINA
 # ======================================================
@@ -221,26 +239,26 @@ with tab_kanban:
                         st.caption(f"🏢 {lead['sociedad']}")
 
                     # Selector para mover de etapa
-                    new_stage = st.selectbox(
+                    _k_stage = f"stage_{lead['id']}"
+                    st.selectbox(
                         "Mover a",
                         PIPELINE_STAGES,
                         index=stage_index(stage),
-                        key=f"stage_{lead['id']}",
+                        key=_k_stage,
+                        on_change=_on_stage_change,
+                        args=(lead["id"], _k_stage),
                     )
-                    if new_stage != stage:
-                        update_lead_stage(lead["id"], new_stage)
-                        _clear_cache()
-                        st.rerun()
 
                     # Notas
-                    notas = st.text_area(
+                    _k_notas = f"notas_{lead['id']}"
+                    st.text_area(
                         "Notas",
                         value=lead["notas"] or "",
-                        key=f"notas_{lead['id']}",
+                        key=_k_notas,
                         height=68,
+                        on_change=_on_notes_change,
+                        args=(lead["id"], _k_notas),
                     )
-                    if notas != (lead["notas"] or ""):
-                        update_lead_notes(lead["id"], notas)
 
 
 # ======================================================
@@ -325,7 +343,7 @@ with tab_detalle:
         st.info("No hay leads. Importa datos desde la barra lateral.")
     else:
         lead_names = [f"{l['nombre']} ({l['ciudad']})" for l in all_leads]
-        selected = st.selectbox("Seleccionar lead", lead_names)
+        selected = st.selectbox("Seleccionar lead", lead_names, key="detail_lead")
 
         if selected:
             idx = lead_names.index(selected)
@@ -353,27 +371,30 @@ with tab_detalle:
 
             with col2:
                 st.subheader("Pipeline")
-                new_stage = st.selectbox(
+                # Clave por lead: con una clave fija ("detail_stage"), Streamlit
+                # conserva el valor al cambiar de lead y lo escribiría sobre el
+                # lead siguiente.
+                _k_stage = f"detail_stage_{lead['id']}"
+                st.selectbox(
                     "Etapa actual",
                     PIPELINE_STAGES,
                     index=stage_index(lead["etapa"]),
-                    key="detail_stage",
+                    key=_k_stage,
+                    on_change=_on_stage_change,
+                    args=(lead["id"], _k_stage),
                 )
-                if new_stage != lead["etapa"]:
-                    update_lead_stage(lead["id"], new_stage)
-                    _clear_cache()
-                    st.rerun()
 
                 st.divider()
-                notas = st.text_area(
+                _k_notas = f"detail_notas_{lead['id']}"
+                st.text_area(
                     "Notas",
                     value=lead["notas"] or "",
                     height=200,
-                    key="detail_notas",
+                    key=_k_notas,
+                    on_change=_on_notes_change,
+                    args=(lead["id"], _k_notas),
                 )
-                if notas != (lead["notas"] or ""):
-                    update_lead_notes(lead["id"], notas)
-                    st.success("Notas guardadas")
+                st.caption("Las notas se guardan al salir del recuadro.")
 
 
 # ======================================================
