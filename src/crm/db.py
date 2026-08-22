@@ -22,6 +22,42 @@ PIPELINE_STAGES = [
     "Descartado",   # No cualificado / no interesado
 ]
 
+# Vocabulario antiguo que puede aparecer en JSONs o filas heredadas.
+# `estado` (Scraped/Enriched) describe el progreso del scraping, NO la etapa de venta.
+_LEGACY_STAGES = {
+    "scraped": "Nuevo",
+    "enriched": "Nuevo",
+    "new": "Nuevo",
+    "contacted": "Contactado",
+    "replied": "Respuesta",
+    "closed": "Cerrado",
+    "discarded": "Descartado",
+}
+
+
+def normalize_stage(value) -> str:
+    """
+    Devuelve siempre una etapa válida de PIPELINE_STAGES.
+
+    Cualquier valor nulo, vacío, con otro uso de mayúsculas o desconocido
+    cae en 'Nuevo'. Evita el ValueError de PIPELINE_STAGES.index() que
+    tumbaría la app entera (ver BUG-2).
+    """
+    if value is None:
+        return PIPELINE_STAGES[0]
+    raw = str(value).strip()
+    if not raw:
+        return PIPELINE_STAGES[0]
+    for stage in PIPELINE_STAGES:
+        if raw.casefold() == stage.casefold():
+            return stage
+    return _LEGACY_STAGES.get(raw.casefold(), PIPELINE_STAGES[0])
+
+
+def stage_index(value) -> int:
+    """Índice seguro para un st.selectbox de etapas."""
+    return PIPELINE_STAGES.index(normalize_stage(value))
+
 
 def _is_cloud() -> bool:
     """Detecta si hay credenciales de Turso configuradas."""
@@ -92,8 +128,44 @@ def init_db():
             conn.execute(stmt)
         except Exception:
             pass  # columna ya existe
+    repair_invalid_stages(conn)
     conn.commit()
     conn.close()
+
+
+def repair_invalid_stages(conn=None) -> int:
+    """
+    Corrige filas cuya `etapa` no pertenece a PIPELINE_STAGES.
+
+    Cubre valores nulos, vacíos, heredados o escritos a mano en la consola
+    de Turso. Es idempotente: si no hay nada que arreglar, no escribe.
+    Retorna el número de filas corregidas.
+    """
+    own_conn = conn is None
+    conn = conn or get_conn()
+    placeholders = ",".join("?" * len(PIPELINE_STAGES))
+    try:
+        rows = conn.execute(
+            f"SELECT id, etapa FROM leads "
+            f"WHERE etapa IS NULL OR etapa NOT IN ({placeholders})",
+            tuple(PIPELINE_STAGES),
+        ).fetchall()
+    except Exception:
+        # La tabla puede no existir todavía en el primer arranque
+        if own_conn:
+            conn.close()
+        return 0
+
+    if rows:
+        conn.executemany(
+            "UPDATE leads SET etapa = ? WHERE id = ?",
+            [(normalize_stage(r["etapa"]), r["id"]) for r in rows],
+        )
+        conn.commit()
+
+    if own_conn:
+        conn.close()
+    return len(rows)
 
 
 def import_leads(leads: list[dict], perfil_origen: str = "") -> int:
@@ -137,7 +209,7 @@ def import_leads(leads: list[dict], perfil_origen: str = "") -> int:
             l.get("email_directo", ""),
             l.get("email_generico", ""),
             l.get("sociedad", ""),
-            "Nuevo",
+            normalize_stage(l.get("etapa")),
             perfil_origen,
         )
         for l in new_leads
@@ -241,7 +313,7 @@ def update_lead_stage(lead_id: int, new_stage: str):
     conn = get_conn()
     conn.execute(
         "UPDATE leads SET etapa = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-        (new_stage, lead_id),
+        (normalize_stage(new_stage), lead_id),
     )
     conn.commit()
     conn.close()

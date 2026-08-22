@@ -192,22 +192,27 @@ Auditoría del código actual. Se corrigen en la **Fase 4**.
 
 ---
 
-### 🐛 BUG-2 · `ValueError` que tumba la app
+### ✅ BUG-2 · `ValueError` que tumba la app — **RESUELTO**
 
-**Archivo:** `src/crm/app.py` (tab Detalle, línea ~359 y tab Kanban, línea ~227)
+**Archivos:** `src/crm/app.py`, `src/crm/db.py`, `src/models/lead.py`
 
 ```python
 index=PIPELINE_STAGES.index(lead["etapa"])
 ```
 
-Si un lead tiene una `etapa` fuera de `PIPELINE_STAGES` (por ejemplo los valores legacy `Scraped` / `Enriched` que define `models/lead.py`, o un import manual), `.index()` lanza `ValueError` y **rompe el render completo de la app**. Además, esos leads son invisibles en el Kanban: no aparecen en ninguna columna y quedan huérfanos.
+Si un lead tiene una `etapa` fuera de `PIPELINE_STAGES` (por ejemplo los valores legacy `Scraped` / `Enriched` que define `models/lead.py`, o una edición manual en la consola de Turso), `.index()` lanza `ValueError` y **rompe el render completo de la app**. Como Streamlit ejecuta el contenido de *todas* las pestañas en cada rerun, una sola fila mala deja la interfaz entera inaccesible — incluida la pestaña que necesitarías para arreglarla.
 
-**Fix:**
-1. Usar un índice seguro con *fallback* a `Nuevo`.
-2. Normalizar la etapa en el momento del import.
-3. Alinear `models/lead.py` con `PIPELINE_STAGES` (eliminar el campo `estado` con valores divergentes, o mapearlo explícitamente).
+**Fix aplicado:**
+1. `normalize_stage()` y `stage_index()` en `db.py`: cualquier valor nulo, vacío, con otras mayúsculas o desconocido cae en `Nuevo`. Se sustituyen los dos `.index()` directos de `app.py`.
+2. `repair_invalid_stages()` se ejecuta dentro de `init_db()`: la BD **se auto-repara al arrancar**. Es idempotente, así que no consume escrituras si no hay nada roto.
+3. `update_lead_stage()` e `import_leads()` normalizan antes de escribir, así que ya no es posible introducir una etapa inválida.
+4. `models/lead.py` documenta que `estado` (`Scraped`/`Enriched`) describe el progreso del *scraping* y **no** es la etapa de venta.
 
-**Severidad:** Alta — provoca caída total de la interfaz.
+**Efecto lateral positivo:** `import_leads()` ahora **respeta la etapa entrante si es válida** (antes forzaba `Nuevo`). Esto es lo que permitirá que la restauración de un backup de la Fase 6.8 conserve el pipeline en lugar de aplanarlo.
+
+**Test:** `python tests/test_bug2.py` — 7 bloques, incluida la reproducción del crash original.
+
+**Severidad:** Alta — provocaba caída total de la interfaz.
 
 ---
 
@@ -441,7 +446,7 @@ fugas de datos descritas en [Riesgos y sostenibilidad](#riesgos-y-sostenibilidad
 
 | Tarea | Ref. | Archivos |
 | ----- | ---- | -------- |
-| Índice seguro de etapa + normalización en import | BUG-2 | `app.py`, `db.py`, `lead.py` |
+| ~~Índice seguro de etapa + normalización en import~~ ✅ **hecho** | BUG-2 | `app.py`, `db.py`, `lead.py` |
 | Unificar clave de dedup a `nombre + direccion` | BUG-3 | `lead.py`, `db.py` |
 | Guardado explícito de notas | BUG-4 | `app.py` |
 | ~~Enricher desde BD cuando hay Turso~~ ✅ **hecho** (`f1fc0f2`) | BUG-1 | `enricher.py`, `db.py` |
@@ -451,7 +456,7 @@ fugas de datos descritas en [Riesgos y sostenibilidad](#riesgos-y-sostenibilidad
 | **Fallar el workflow si el scraper devuelve 0 leads** | RIESGO-D | `pipeline.yml`, `maps_scraper.py` |
 
 **Test de validación:**
-- Insertar un lead con `etapa = "Scraped"` → la app no cae y el lead aparece en `Nuevo`.
+- ~~Insertar un lead con `etapa = "Scraped"` → la app no cae y el lead aparece en `Nuevo`.~~ ✅ **validado** (`python tests/test_bug2.py`)
 - Importar dos clínicas con mismo nombre y ciudad pero distinta dirección → entran las dos.
 - Editar notas y recargar → un solo `UPDATE`, el texto persiste.
 - ~~Lanzar modo `enricher` en cloud → enriquece leads reales de Turso.~~ ✅ **validado**

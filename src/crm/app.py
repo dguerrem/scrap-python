@@ -32,7 +32,7 @@ from src.crm.db import (
     update_lead_stage, update_lead_notes, get_stats, clear_all_leads,
     save_scrap_profile, get_scrap_profiles, get_scrap_profile,
     update_scrap_profile, delete_scrap_profile,
-    PIPELINE_STAGES,
+    PIPELINE_STAGES, stage_index,
 )
 from src.crm import pipeline_runner
 
@@ -224,7 +224,7 @@ with tab_kanban:
                     new_stage = st.selectbox(
                         "Mover a",
                         PIPELINE_STAGES,
-                        index=PIPELINE_STAGES.index(stage),
+                        index=stage_index(stage),
                         key=f"stage_{lead['id']}",
                     )
                     if new_stage != stage:
@@ -356,7 +356,7 @@ with tab_detalle:
                 new_stage = st.selectbox(
                     "Etapa actual",
                     PIPELINE_STAGES,
-                    index=PIPELINE_STAGES.index(lead["etapa"]),
+                    index=stage_index(lead["etapa"]),
                     key="detail_stage",
                 )
                 if new_stage != lead["etapa"]:

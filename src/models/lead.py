@@ -14,7 +14,8 @@ class Lead:
     url: str = ""
     puntuacion: float = 0.0
     resenas: int = 0
-    estado: str = "Scraped"
+    estado: str = "Scraped"      # Progreso del scraping: Scraped | Enriched.
+                                 # NO es la etapa de venta del CRM (`etapa` en BD).
 
     # Campos de enriquecimiento (Fase 2)
     director: str = ""           # Nombre del responsable/titular (Aviso Legal)
