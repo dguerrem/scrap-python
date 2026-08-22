@@ -178,15 +178,17 @@ scrap-python/
 
 Auditoría del código actual. Se corrigen en la **Fase 4**.
 
-### 🐛 BUG-1 · El modo `enricher` no funciona en cloud
+### ✅ BUG-1 · El modo `enricher` no funciona en cloud — **RESUELTO**
 
-**Archivo:** `.github/workflows/pipeline.yml` + `src/scraper/enricher.py`
+**Archivo:** `src/scraper/enricher.py` + `src/crm/db.py` · **Commit:** `f1fc0f2`
 
-`enricher.run()` lee `data/leads_raw.json` del disco. En GitHub Actions el job arranca de un checkout limpio, donde ese fichero **no existe** (está en `.gitignore`). El modo `enricher` enriquece cero leads y termina en verde, sin avisar.
+`enricher.run()` leía `data/leads_raw.json` del disco. En GitHub Actions el job arranca de un checkout limpio, donde ese fichero **no existe** (está en `.gitignore`). El modo `enricher` enriquecía cero leads y terminaba en verde, sin avisar.
 
-**Fix:** cuando `TURSO_DATABASE_URL` esté presente, el enricher debe leer los leads pendientes **desde la BD** y escribir los resultados de vuelta. Añadir `get_leads_to_enrich()` y `update_lead_enrichment()` en `db.py`.
+**Fix aplicado:** regla de fuente de datos —**si existe el JSON, se usa; si no existe y hay Turso, se lee de la BD**—. Esto preserva el modo `pipeline` (donde el scraper acaba de escribir leads frescos que todavía no están en Turso) y arregla el modo `enricher` suelto. Añadidas `get_leads_to_enrich()` y `update_lead_enrichment()` en `db.py`. El guardado es **lead a lead**, para que una interrupción de Actions no pierda el trabajo hecho.
 
-**Severidad:** Alta — funcionalidad anunciada en la UI que no hace nada.
+**Validado en producción:** run cloud sobre 31 leads pendientes → Director, Email y Sociedad rellenados. Ratio de acierto observado: **~90-95 % en email**, sensiblemente menor en director.
+
+**Severidad:** Alta — funcionalidad anunciada en la UI que no hacía nada.
 
 ---
 
@@ -442,7 +444,8 @@ fugas de datos descritas en [Riesgos y sostenibilidad](#riesgos-y-sostenibilidad
 | Índice seguro de etapa + normalización en import | BUG-2 | `app.py`, `db.py`, `lead.py` |
 | Unificar clave de dedup a `nombre + direccion` | BUG-3 | `lead.py`, `db.py` |
 | Guardado explícito de notas | BUG-4 | `app.py` |
-| Enricher desde BD cuando hay Turso | BUG-1 | `enricher.py`, `db.py`, `pipeline.yml` |
+| ~~Enricher desde BD cuando hay Turso~~ ✅ **hecho** (`f1fc0f2`) | BUG-1 | `enricher.py`, `db.py` |
+| Calidad del lead basada en email, no en director | — | `app.py` |
 | **Sanear logs en CI** (sin nombres, emails ni directores) | RIESGO-A | `maps_scraper.py`, `enricher.py` |
 | **No subir artifacts si `auto_import` está activo** | RIESGO-B | `pipeline.yml` |
 | **Fallar el workflow si el scraper devuelve 0 leads** | RIESGO-D | `pipeline.yml`, `maps_scraper.py` |
@@ -451,7 +454,7 @@ fugas de datos descritas en [Riesgos y sostenibilidad](#riesgos-y-sostenibilidad
 - Insertar un lead con `etapa = "Scraped"` → la app no cae y el lead aparece en `Nuevo`.
 - Importar dos clínicas con mismo nombre y ciudad pero distinta dirección → entran las dos.
 - Editar notas y recargar → un solo `UPDATE`, el texto persiste.
-- Lanzar modo `enricher` en cloud → enriquece leads reales de Turso.
+- ~~Lanzar modo `enricher` en cloud → enriquece leads reales de Turso.~~ ✅ **validado**
 - Revisar el log público de un run → **no aparece ningún nombre, email ni director**.
 - Forzar un scraping que no encuentre resultados → el workflow termina en **rojo**, no en verde.
 
@@ -662,7 +665,7 @@ CREATE TABLE email_queue (
 CREATE TABLE email_templates (
     id       INTEGER PRIMARY KEY AUTOINCREMENT,
     nombre   TEXT NOT NULL,
-    asunto   TEXT NOT NULL,       -- admite {nombre}, {ciudad}, {director}
+    asunto   TEXT NOT NULL,       -- admite {nombre}, {ciudad} (ver nota sobre {director})
     cuerpo   TEXT NOT NULL,
     activa   INTEGER DEFAULT 0
 );
@@ -878,9 +881,21 @@ La ventana 08:00-15:00 son 420 minutos. Con un hueco medio de 10 min salen **~42
 - Acciones: quitar de la cola, mover a supresión, reintentar fallidos.
 
 **c) Plantillas**
-- Editor de asunto y cuerpo con variables `{nombre}`, `{ciudad}`, `{director}`.
+- Editor de asunto y cuerpo con variables `{nombre}` y `{ciudad}`.
 - **Vista previa renderizada con un lead real**, incluida la firma.
 - Validación: bloquear el guardado si falta el pie de baja.
+
+> ⚠️ **`{director}` no se usa en el envío automático.** Medido en producción, el enricher
+> acierta el email en un ~90-95 % pero el director bastante menos, y en algunos casos devuelve
+> el propio nombre de la clínica como si fuera una persona. Un email en frío que empieza
+> con el nombre equivocado —o con el nombre del negocio usado como nombre propio— destruye
+> la credibilidad más de lo que la personalización la aporta. El copy automático se dirige
+> siempre a la **clínica** (`{nombre}`, dato 100 % fiable desde Google Maps).
+>
+> El campo `director` **se conserva** en la BD: es útil en el seguimiento manual, cuando alguien
+> responde y quieres saber con quién hablas, o para buscar a la persona en LinkedIn.
+> Si en el futuro se añade una plantilla con `{director}`, el motor debe **excluir** de esa
+> plantilla los leads donde `director` esté vacío o coincida con `nombre`.
 
 **d) Encolado**
 - Selector de leads por ciudad, perfil de origen o calidad.
@@ -1123,6 +1138,8 @@ Registro de las decisiones acordadas y su motivo.
 | Aviso de stock bajo | Email a dos direcciones propias | No exige entrar en la app para enterarse |
 | Reposición automática | Aplazada a Fase 7 | Primero hay que ver el comportamiento del sistema |
 | Pie de baja | Obligatorio | Art. 22 LSSI + mejora la entregabilidad |
+| Personalización del copy | Nombre de la **clínica**, no del director | El director tiene baja fiabilidad y a veces duplica el nombre del negocio |
+| Campo `director` | Se conserva, pero solo para uso manual | Útil al responder o buscar en LinkedIn; no apto para automatizar |
 | Tracking y IMAP | Descartados | Exigen infraestructura fuera del alcance |
 | **Visibilidad del repositorio** | **Público, de forma permanente** | En privado el mailer solo consume el 92 % de la cuota gratuita de Actions |
 | Datos personales en logs y artifacts | Prohibidos en CI | En repo público son legibles por cualquiera |
