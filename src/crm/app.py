@@ -31,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from src.crm.db import init_db, import_from_json, import_leads, clear_all_leads
 from src.crm.views import _components as ui
-from src.crm.views import guia, kanban, tabla, detalle, scrap
+from src.crm.views import guia, kanban, tabla, detalle, emails, scrap
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 
@@ -122,8 +122,8 @@ with st.sidebar:
 # TABS
 # ======================================================
 
-tab_guia, tab_kanban, tab_tabla, tab_detalle, tab_scrap = st.tabs(
-    ["📖 Guía", "📋 Kanban", "📊 Tabla", "🔍 Detalle", "⚙️ Scrap"]
+tab_guia, tab_kanban, tab_tabla, tab_detalle, tab_emails, tab_scrap = st.tabs(
+    ["📖 Guía", "📋 Kanban", "📊 Tabla", "🔍 Detalle", "📧 Emails", "⚙️ Scrap"]
 )
 
 with tab_guia:
@@ -137,6 +137,9 @@ with tab_tabla:
 
 with tab_detalle:
     detalle.render(criterios)
+
+with tab_emails:
+    emails.render()
 
 with tab_scrap:
     scrap.render()

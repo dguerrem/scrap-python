@@ -18,7 +18,7 @@ Pipeline de extracción, enriquecimiento y contacto de leads B2B para la prospec
 - [Plan de desarrollo](#plan-de-desarrollo)
   - [Fase 4 — Corrección de bugs y exposición](#fase-4--corrección-de-bugs-y-exposición)
   - [Fase 5 — Refactor de UI + Guía rápida](#fase-5--refactor-de-ui--guía-rápida)
-  - [Fase 6 — Módulo de envío de emails](#fase-6--módulo-de-envío-de-emails)
+  - [Fase 6 — Módulo de envío de emails ✅](#fase-6--módulo-de-envío-de-emails--implementada)
   - [Fase 7 — Backlog documentado](#fase-7--backlog-documentado-no-se-implementa)
 - [Orden de trabajo](#orden-de-trabajo)
 - [Decisiones de diseño tomadas](#decisiones-de-diseño-tomadas)
@@ -134,18 +134,39 @@ scrap-python/
 │   │   ├── enricher.py           # Fase 2: Enriquecimiento webs
 │   │   └── config.py             # Ciudades, filtros, delays, user-agents
 │   ├── crm/
-│   │   ├── app.py                # Fase 3: CRM Streamlit
+│   │   ├── app.py                # Bootstrap, sidebar y routing de tabs
+│   │   ├── views/                # Un fichero por tab (Fase 5)
+│   │   │   ├── _components.py    # Caché, filtros compartidos y callbacks
+│   │   │   ├── guia.py           # 📖 Guía rápida y enlaces
+│   │   │   ├── kanban.py         # 📋 Embudo
+│   │   │   ├── tabla.py          # 📊 Tabla y export CSV
+│   │   │   ├── detalle.py        # 🔍 Ficha del lead
+│   │   │   ├── emails.py         # 📧 Panel del mailer (Fase 6)
+│   │   │   └── scrap.py          # ⚙️ Perfiles y lanzador
 │   │   ├── db.py                 # Capa de datos (SQLite / Turso)
 │   │   ├── turso_http.py         # Cliente HTTP libSQL sin deps nativas
 │   │   └── pipeline_runner.py    # Lanzador local (subprocess) y cloud (GH API)
+│   ├── mailer/                   # Fase 6: motor de envío
+│   │   ├── config.py             # Credenciales (entorno/secrets) y modos de prueba
+│   │   ├── store.py              # Único punto de SQL del mailer
+│   │   ├── templates.py          # Validación, render y pie de baja
+│   │   ├── sender.py             # MIME + SMTP + dry-run a .eml
+│   │   ├── scheduler.py          # Ventana, rampa, tope, jitter, tick()
+│   │   └── autonomy.py           # Contactables, encolado y avisos
 │   └── models/
 │       └── lead.py               # Dataclass Lead
-├── .github/workflows/pipeline.yml
+├── tests/                        # Scripts sin framework: python tests/x.py
+├── .github/workflows/
+│   ├── pipeline.yml              # Scraper + enricher bajo demanda
+│   ├── mailer.yml                # Cron de envío cada 5 min, L-V
+│   └── backup.yml                # Backup cifrado semanal + keepalive
 ├── .streamlit/                   # config.toml + secrets.toml.example
 ├── data/                         # Output (gitignored)
 ├── run_scraper.py
 ├── run_enricher.py
 ├── run_pipeline.py
+├── run_mailer.py
+├── run_backup.py
 └── requirements.txt
 ```
 
@@ -659,9 +680,66 @@ Primer tab de la app, visible al entrar. Contenido implementado:
 
 ---
 
-### Fase 6 — Módulo de envío de emails
+### Fase 6 — Módulo de envío de emails ✅ IMPLEMENTADA
 
 Sistema de contacto en frío automatizado, con ritmo humano y garantía de **un único impacto por clínica**.
+
+> **Estado:** el motor, la UI y los workflows están terminados y con tests en verde
+> (`tests/test_fase6.py`, 60+ comprobaciones, más el bloque 8 de `tests/test_bug5.py`
+> que verifica que todo el mailer funciona igual contra Turso).
+> **Falta únicamente el checklist manual 6.0** (contraseña de aplicación de Google
+> y secrets en GitHub): sin eso el motor arranca pero no puede enviar.
+
+**Qué se entregó**
+
+| Pieza | Dónde |
+| ----- | ----- |
+| Esquema de datos (6 tablas + 16 ajustes) | `src/crm/db.py` → `_init_mailer_schema()` |
+| Credenciales fuera de la BD y del código | `src/mailer/config.py` |
+| Todo el SQL del mailer, incluido el claim atómico | `src/mailer/store.py` |
+| Validación y render de plantillas + pie de baja | `src/mailer/templates.py` |
+| Construcción MIME y envío SMTP | `src/mailer/sender.py` |
+| Ventana horaria, rampa, tope, jitter, `tick()` | `src/mailer/scheduler.py` |
+| Contactables, autonomía, encolado, avisos | `src/mailer/autonomy.py` |
+| CLI | `run_mailer.py` |
+| UI | `src/crm/views/emails.py` (tab `📧 Emails`) |
+| Cron de envío | `.github/workflows/mailer.yml` |
+| Backup cifrado + keepalive | `.github/workflows/backup.yml` + `run_backup.py` |
+
+**Cómo se prueba en local, sin enviar nada ni gastar leads reales**
+
+```bash
+export EMAIL_DRY_RUN=1
+python run_mailer.py --seed-test                       # 5 leads falsos con casos límite
+python run_mailer.py --enqueue 10 --perfil "Seed de prueba"
+python run_mailer.py --tick --force                    # escribe data/emails_out/*.eml
+open data/emails_out/                                  # así es como llegaría
+python run_mailer.py --reset-test                      # borra todo el rastro
+```
+
+> ⚠️ **`--enqueue` sin `--perfil` coge leads reales**, y encolar reserva el dominio en el
+> ledger *aunque sea dry-run*. Es intencionado: es la única forma de garantizar que nunca
+> se llama dos veces a la misma puerta. Si te pasa, `python run_mailer.py --forget dominio.es`
+> lo devuelve a la lista de contactables.
+
+**Enviarte los correos a ti mismo, ya de verdad:**
+
+```bash
+EMAIL_REDIRECT_TO=tu@correo.com python run_mailer.py --tick --force
+```
+
+Sale por SMTP real, pero todos los mensajes acaban en tu buzón. El destinatario original
+queda en la cabecera `X-Original-To` para poder auditarlo.
+
+**Diferencias con el diseño original, y por qué**
+
+| Cambio | Motivo |
+| ------ | ------ |
+| Cabecera `List-Unsubscribe` además del pie de texto | Gmail y Outlook puntúan la baja en un clic; el pie por sí solo no cuenta |
+| `--reset-test`, `--forget` y `--perfil` | El diseño no contemplaba deshacer una prueba, y la primera que hice quemó un dominio real |
+| El backup se cifra con GPG y va a un artifact | Un repositorio privado aparte era una pieza más que mantener; el artifact cifrado con `BACKUP_PASSPHRASE` da la misma garantía |
+| El keepalive commitea `.github/keepalive.txt` | Las ejecuciones de workflow no cuentan como actividad: GitHub mira los commits |
+
 
 #### Reglas de negocio (inamovibles)
 
@@ -739,6 +817,23 @@ dig +short TXT _dmarc.psycoerp.es
 | `SMTP_USER` | `info@psycoerp.es` | ídem |
 | `SMTP_APP_PASSWORD` | 16 caracteres de Google | ídem |
 | `EMAIL_FROM_NAME` | `Info \| PsycoERP` | ídem |
+| `BACKUP_PASSPHRASE` | — | Solo GitHub. Cifra el backup semanal |
+
+En GitHub van en **Settings → Secrets and variables → Actions**. `mailer.yml` falla en el
+primer paso, con un mensaje claro, si faltan `SMTP_USER` o `SMTP_APP_PASSWORD`: es preferible
+un job en rojo a un job en verde que no envió nada.
+
+##### ✅ 6. Prueba de humo en producción
+
+Una vez puestos los secrets, y **antes** de encender la rampa:
+
+1. En el tab `📧 Emails` → Ajustes → **Tope manual = 2**.
+2. Encolar 2 leads y encender el interruptor.
+3. Esperar al siguiente cron (máximo 5 minutos dentro de la ventana) o lanzar
+   `📧 Mailer` a mano desde Actions con `forzar = true`.
+4. Comprobar en el Historial que salieron, y en la bandeja de `info@psycoerp.es`
+   que están en «Enviados» y no rebotaron.
+5. Vaciar el **Tope manual** para que arranque la rampa automática.
 
 ---
 
@@ -1212,16 +1307,20 @@ sin actividad. Un job semanal —y su commit asociado— garantiza que eso no oc
 ## Orden de Trabajo
 
 ```
-Fase 4 (Bugs + fugas de datos) → Test
-   → Fase 5 (UI + Guía) → Test
-      → Fase 6.0 (Config externa) ⚠️ BLOQUEANTE
-         → Fase 6.1-6.3 (Datos + Motor + Scheduler) → Test local
-            → Fase 6.4-6.5 (UI + Autonomía + Heartbeat) → Test
-               → Fase 6.6 (Validación local completa) ⚠️ OBLIGATORIO
-                  → Fase 6.8 (Backup + keepalive) ⚠️ ANTES DE PRODUCCIÓN
+Fase 4 (Bugs + fugas de datos) ✅ validada en producción
+   → Fase 5 (UI + Guía) ✅ desplegada
+      → Fase 6.1-6.3 (Datos + Motor + Scheduler) ✅
+         → Fase 6.4-6.5 (UI + Autonomía + Heartbeat) ✅
+            → Fase 6.6 (Validación local) ✅ tests en verde
+               → Fase 6.8 (Backup + keepalive) ✅
+                  → Fase 6.0 (Config externa) ⚠️ AQUÍ ESTAMOS — checklist manual
                      → Prueba de humo en producción (tope 2/día)
                         → Rampa de calentamiento
 ```
+
+> El orden real quedó invertido respecto al plan: la 6.0 se dejó para el final porque el
+> `EMAIL_DRY_RUN` permite construir y validar el motor entero sin credenciales. Ahora es
+> lo único que bloquea el primer envío.
 
 > Cada fase se desarrolla, se testea y se avanza. **Nada de avanzar sin validar.**
 > En la Fase 6 esta regla no es una buena práctica: es la diferencia entre tener un canal de captación o perder la cuenta de correo del negocio.
@@ -1277,6 +1376,18 @@ python run_pipeline.py --headless
 streamlit run src/crm/app.py        # http://localhost:8501
 
 # Mailer (Fase 6)
-EMAIL_DRY_RUN=1 python run_mailer.py --tick
-python run_mailer.py --status
+python run_mailer.py --status                          # qué haría ahora mismo
+python run_mailer.py --autonomy                        # cuántos días de contactos quedan
+
+EMAIL_DRY_RUN=1 python run_mailer.py --seed-test       # datos de prueba
+EMAIL_DRY_RUN=1 python run_mailer.py --enqueue 10 --perfil "Seed de prueba"
+EMAIL_DRY_RUN=1 python run_mailer.py --tick --force    # -> data/emails_out/*.eml
+python run_mailer.py --reset-test                      # limpia la prueba
+
+EMAIL_REDIRECT_TO=tu@correo.com python run_mailer.py --tick --force  # real, a tu buzón
+python run_mailer.py --forget dominio.es               # deshace una reserva del ledger
+
+# Backup
+python run_backup.py                                   # -> data/backup/backup-AAAA-MM-DD.json
+python run_backup.py --restaurar x.json --tabla email_ledger
 ```

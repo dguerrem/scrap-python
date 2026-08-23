@@ -1,0 +1,68 @@
+name: "💾 Backup semanal"
+
+on:
+  schedule:
+    - cron: "0 3 * * 0"   # Domingos a las 03:00 UTC
+  workflow_dispatch:
+
+# Dos cosas a la vez:
+#  1. Copia de seguridad cifrada de la base de datos.
+#  2. Keepalive: GitHub desactiva los cron de los repos publicos tras 60 dias
+#     sin actividad. El commit del final reinicia ese contador.
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Exportar la base de datos
+        run: python run_backup.py --salida backup.json
+
+      - name: Cifrar
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          if [ -z "${BACKUP_PASSPHRASE}" ]; then
+            echo "::error::Falta el secret BACKUP_PASSPHRASE. El backup lleva emails y notas: sin cifrar no se sube a ningun sitio."
+            rm -f backup.json
+            exit 1
+          fi
+          gpg --batch --yes --symmetric --cipher-algo AES256 \
+              --passphrase "${BACKUP_PASSPHRASE}" \
+              --output "backup-$(date -u +%Y-%m-%d).json.gpg" backup.json
+          rm -f backup.json
+          ls -lh backup-*.json.gpg
+
+      - name: Subir el backup cifrado
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-${{ github.run_number }}
+          path: backup-*.json.gpg
+          retention-days: 90
+
+      - name: Keepalive
+        run: |
+          mkdir -p .github
+          date -u +"Ultimo backup: %Y-%m-%d %H:%M UTC" > .github/keepalive.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/keepalive.txt
+          git commit -m "chore: keepalive + backup semanal" || exit 0
+          git push

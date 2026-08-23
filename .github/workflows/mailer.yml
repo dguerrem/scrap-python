@@ -1,0 +1,67 @@
+name: "📧 Mailer"
+
+on:
+  schedule:
+    # Cada 5 minutos, de 5 a 14 UTC, de lunes a viernes.
+    # El rango es ancho a propósito: la ventana real (hora española,
+    # con su cambio de horario) la decide Python en src/mailer/scheduler.py.
+    - cron: "*/5 5-14 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      forzar:
+        description: "Saltar horario y ritmo (envía 1 ya)"
+        required: false
+        default: false
+        type: boolean
+      dry_run:
+        description: "Simular sin enviar nada"
+        required: false
+        default: false
+        type: boolean
+
+# Un solo mailer a la vez. Sin esto, dos ejecuciones solapadas podrían
+# competir por la misma fila de la cola.
+concurrency:
+  group: mailer
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+      SMTP_HOST: ${{ secrets.SMTP_HOST }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      SMTP_USER: ${{ secrets.SMTP_USER }}
+      SMTP_APP_PASSWORD: ${{ secrets.SMTP_APP_PASSWORD }}
+      SMTP_FROM_NAME: ${{ secrets.SMTP_FROM_NAME }}
+      SMTP_REPLY_TO: ${{ secrets.SMTP_REPLY_TO }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Comprobar que hay credenciales
+        run: |
+          if [ -z "${SMTP_USER}" ] || [ -z "${SMTP_APP_PASSWORD}" ]; then
+            echo "::error::Faltan los secrets SMTP_USER / SMTP_APP_PASSWORD"
+            exit 1
+          fi
+          echo "Credenciales presentes."
+
+      - name: Enviar
+        env:
+          EMAIL_DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+        run: |
+          ARGS="--tick"
+          if [ "${{ inputs.forzar }}" = "true" ]; then ARGS="$ARGS --force"; fi
+          python run_mailer.py $ARGS
+
+      - name: Revisar autonomía y avisos
+        continue-on-error: true
+        run: python run_mailer.py --autonomy

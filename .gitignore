@@ -10,6 +10,8 @@ venv/
 
 # Data output (no subir leads al repo)
 data/
+backup*.json
+backup*.json.gpg
 
 # Environment variables
 .env

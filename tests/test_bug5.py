@@ -189,7 +189,70 @@ check("el perfil se guardo", any(p["nombre"] == "Perfil cloud" for p in perfiles
 check("las ciudades se deserializan",
       perfiles[0]["ciudades"] == ["Murcia"], str(perfiles[0]["ciudades"]))
 
-print("\n8) Ningun sitio de db.py recorre un cursor sin fetchall")
+print("\n8) El mailer tampoco usa atajos de sqlite3 (Fase 6)")
+# El motor de envio corre en GitHub Actions contra Turso, asi que su capa de
+# datos pasa por el mismo doble. Lo critico es el claim atomico: sin
+# transacciones, si esa sentencia no funciona igual en cloud se enviarian
+# correos duplicados.
+os.environ["EMAIL_DRY_RUN"] = "1"
+from src.mailer import store as mstore
+
+pruebas_mailer = [
+    ("set_setting", lambda: mstore.set_setting("tope_manual", "7")),
+    ("get_setting", lambda: mstore.get_setting("tope_manual")),
+    ("all_settings", lambda: mstore.all_settings()),
+    ("registrar_ledger", lambda: mstore.registrar_ledger("cloud.es", "a@cloud.es", 1)),
+    ("en_ledger", lambda: mstore.en_ledger("cloud.es")),
+    ("suprimir", lambda: mstore.suprimir("vetado.es", "x@vetado.es", "test")),
+    ("listar_supresion", lambda: mstore.listar_supresion()),
+    ("encolar", lambda: mstore.encolar(1, "hola@encolado.es", "a", "b", "c")),
+    ("claim", lambda: mstore.claim()),
+    ("contar_cola", lambda: mstore.contar_cola()),
+    ("liberar_atascados", lambda: mstore.liberar_atascados()),
+    ("log", lambda: mstore.log("test", "detalle")),
+    ("ultimos_logs", lambda: mstore.ultimos_logs(5)),
+    ("historial", lambda: mstore.historial(5)),
+    ("ultimo_envio", lambda: mstore.ultimo_envio()),
+    ("guardar_plantilla", lambda: mstore.guardar_plantilla("P", "A {nombre}", "C")),
+    ("plantillas", lambda: mstore.plantillas()),
+    ("reintentar_fallidos", lambda: mstore.reintentar_fallidos()),
+]
+for nombre, fn in pruebas_mailer:
+    try:
+        fn()
+        check(nombre, True)
+    except Exception as e:
+        check(nombre, False, f"{type(e).__name__}: {e}")
+
+check("el ajuste se lee de vuelta", mstore.get_setting("tope_manual") == "7",
+      mstore.get_setting("tope_manual"))
+check("el ledger reserva el dominio", mstore.en_ledger("cloud.es"))
+check("un dominio ya en ledger no se puede reservar dos veces",
+      mstore.registrar_ledger("cloud.es", "b@cloud.es", 2) is False)
+check("un dominio suprimido no se encola",
+      mstore.encolar(2, "x@vetado.es", "a", "b", "c") is False)
+
+# El claim ya vacio la cola en el bucle anterior: se reencola con dos dominios
+# DISTINTOS para probar que dos claims consecutivos nunca devuelven la misma fila.
+mstore.encolar(3, "hola@carrera-uno.es", "a", "b", "c")
+mstore.encolar(4, "hola@carrera-dos.es", "a", "b", "c")
+primero, segundo = mstore.claim(), mstore.claim()
+check("el claim atomico funciona igual en cloud",
+      primero and segundo and primero["id"] != segundo["id"],
+      f"{primero and primero['id']} vs {segundo and segundo['id']}")
+check("con la cola vacia el claim no devuelve nada", mstore.claim() is None)
+check("dos buzones del mismo dominio no se encolan dos veces",
+      mstore.encolar(5, "uno@misma-casa.es", "a", "b", "c") is True
+      and mstore.encolar(6, "dos@misma-casa.es", "a", "b", "c") is False)
+
+from src.mailer import autonomy as mautonomy
+try:
+    datos = mautonomy.resumen()
+    check("el panel de autonomia se calcula en cloud", isinstance(datos["contactables"], int))
+except Exception as e:
+    check("el panel de autonomia se calcula en cloud", False, f"{type(e).__name__}: {e}")
+
+print("\n9) Ningun sitio de db.py recorre un cursor sin fetchall")
 # Red de seguridad por si vuelve el patron en codigo nuevo: aunque ahora
 # _Cursor es iterable, conviene que el estilo sea explicito.
 fuente = (ROOT / "src/crm/db.py").read_text(encoding="utf-8")

@@ -16,7 +16,7 @@ from src.crm.views import _components as ui
 
 
 # ======================================================
-# 1 · FLUJO EN 4 PASOS
+# 1 · FLUJO EN 5 PASOS
 # ======================================================
 
 _PASOS = [
@@ -34,12 +34,20 @@ _PASOS = [
      "tiene marcado *Guardar los leads al terminar*). Los repetidos no se "
      "duplican."),
 
-    ("3️⃣ Trabajar el embudo",
+    ("3️⃣ Escribirles solo",
+     "Tab **📧 Emails** → escoge la plantilla → **➕ Añadir a la cola** → "
+     "enciende el **interruptor**.",
+     "A partir de ahí el robot envía solo: de lunes a viernes por la mañana, "
+     "uno cada 5-15 minutos y con un tope diario que sube poco a poco. Cuando "
+     "envía un correo, el lead pasa a *Contactado* solo. A la misma clínica "
+     "nunca se le escribe dos veces."),
+
+    ("4️⃣ Trabajar el embudo",
      "Tab **📋 Kanban** → botones **→ Contactado** / **✖ Descartar**.",
      "Cada lead recorre las etapas de izquierda a derecha. El punto de color "
      "te dice si le puedes escribir: verde y amarillo sí, rojo no."),
 
-    ("4️⃣ Consultar y exportar",
+    ("5️⃣ Consultar y exportar",
      "Tab **📊 Tabla** para verlo todo junto y descargar CSV · "
      "Tab **🔍 Detalle** para la ficha de un lead.",
      "Los filtros de la barra lateral afectan a Kanban, Tabla y Detalle a la vez."),
@@ -64,6 +72,11 @@ _CHULETA = [
     ("Buscar emails de los leads que ya tengo", "⚙️ Scrap → Lanzar (Solo buscar emails)"),
     ("Cambiar ciudades o filtros de búsqueda", "⚙️ Scrap → Editar perfil"),
     ("Marcar un lead como contactado", "📋 Kanban → botón → Contactado"),
+    ("Empezar a enviar correos", "📧 Emails → Encolar → interruptor Mailer encendido"),
+    ("Parar los envíos ya", "📧 Emails → apagar el interruptor"),
+    ("Cambiar el texto del correo", "📧 Emails → Plantillas"),
+    ("Que a alguien no se le escriba nunca", "📧 Emails → Ajustes → lista negra"),
+    ("Ver a quién se le ha escrito", "📧 Emails → Historial"),
     ("Apuntar algo de un lead", "🔍 Detalle → Notas (se guarda al salir del recuadro)"),
     ("Sacar la lista de emails", "📊 Tabla → ⬇️ Descargar CSV"),
     ("Ver sólo los leads con email de verdad", "Barra lateral → Email → Con email directo"),
@@ -178,10 +191,27 @@ def _estado():
             estado, detalle = "😴 Parada", "Nunca lanzada"
     filas.append({"Qué": "Robot de scraping", "Estado": estado, "Detalle": detalle})
 
+    try:
+        from src.mailer import scheduler as _sched
+        m = _sched.estado()
+        if m["activo"]:
+            estado_mail = "🟢 Encendido"
+            detalle_mail = (
+                f"Hoy {m['enviados_hoy']}/{m['tope_diario']} · "
+                f"{m['pendientes']} en cola"
+            )
+            if not m["ventana_abierta"]:
+                detalle_mail += f" · {m['motivo_ventana']}"
+        else:
+            estado_mail = "⚪ Apagado"
+            detalle_mail = "Enciéndelo en el tab 📧 Emails"
+    except Exception as e:
+        estado_mail, detalle_mail = "⚠️ No disponible", str(e)[:60]
+
     filas.append({
         "Qué": "Envío automático de correos",
-        "Estado": "🚧 Pendiente",
-        "Detalle": "Llega en la Fase 6 del plan",
+        "Estado": estado_mail,
+        "Detalle": detalle_mail,
     })
 
     st.dataframe(filas, use_container_width=True, hide_index=True)

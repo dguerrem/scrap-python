@@ -132,6 +132,7 @@ def init_db():
         )
     """)
     seed_app_links(conn)
+    _init_mailer_schema(conn)
     # Migraciones: añadir columnas a tablas ya existentes
     for stmt in [
         "ALTER TABLE leads ADD COLUMN perfil_origen TEXT DEFAULT ''",
@@ -151,6 +152,125 @@ def init_db():
     backfill_dedup_keys(conn)
     conn.commit()
     conn.close()
+
+
+# ======================================================
+# ESQUEMA DEL MAILER (Fase 6)
+# ======================================================
+
+# Valores por defecto de email_settings. Se siembran una sola vez; a partir de
+# ahí mandan los que haya en BD (editables desde el tab Emails).
+_MAILER_DEFAULTS = {
+    "activo": "0",                  # interruptor maestro
+    "warmup_start_date": "",        # se rellena al activar por primera vez
+    "tope_maximo": "45",
+    "tope_manual": "",              # si tiene valor, ignora la rampa
+    "intervalo_min_min": "5",
+    "intervalo_max_min": "15",
+    "ventana_inicio": "8",
+    "ventana_fin": "15",
+    "next_send_at": "",
+    "firma_html": "",
+    "firma_texto": "",
+    "aviso_emails": "",
+    "aviso_umbral_dias": "3",
+    "aviso_ultimo": "",
+    "heartbeat_ultimo": "",
+    "ultimo_backup": "",
+}
+
+
+def _init_mailer_schema(conn):
+    """Crea las tablas del mailer. Idéntico en SQLite y Turso."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS email_ledger (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            dominio    TEXT NOT NULL,
+            email      TEXT NOT NULL,
+            lead_id    INTEGER,
+            enviado_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS email_queue (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            lead_id      INTEGER NOT NULL,
+            destinatario TEXT NOT NULL,
+            dominio      TEXT NOT NULL,
+            asunto       TEXT NOT NULL,
+            cuerpo_texto TEXT NOT NULL,
+            cuerpo_html  TEXT NOT NULL,
+            estado       TEXT DEFAULT 'pending',
+            intentos     INTEGER DEFAULT 0,
+            error        TEXT DEFAULT '',
+            claim_token  TEXT DEFAULT '',
+            created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            claimed_at   TIMESTAMP,
+            sent_at      TIMESTAMP
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS email_templates (
+            id     INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre TEXT NOT NULL,
+            asunto TEXT NOT NULL,
+            cuerpo TEXT NOT NULL,
+            activa INTEGER DEFAULT 0
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS email_suppression (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            dominio    TEXT NOT NULL,
+            email      TEXT DEFAULT '',
+            motivo     TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS email_settings (
+            clave TEXT PRIMARY KEY,
+            valor TEXT
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS email_log (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            queue_id   INTEGER,
+            evento     TEXT,
+            detalle    TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # Los índices únicos son la garantía dura de "un solo impacto por dominio".
+    for stmt in [
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_ledger_dominio "
+        "ON email_ledger(dominio)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_suppression_dominio "
+        "ON email_suppression(dominio)",
+        "CREATE INDEX IF NOT EXISTS idx_queue_estado ON email_queue(estado)",
+        # Un mismo lead no puede estar dos veces en cola esperando salir.
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_queue_pendiente "
+        "ON email_queue(dominio) WHERE estado IN ('pending', 'sending')",
+        "ALTER TABLE email_queue ADD COLUMN claim_token TEXT DEFAULT ''",
+        "ALTER TABLE email_queue ADD COLUMN claimed_at TIMESTAMP",
+    ]:
+        try:
+            conn.execute(stmt)
+        except Exception:
+            pass  # ya existe
+
+    existentes = {
+        r["clave"]
+        for r in conn.execute("SELECT clave FROM email_settings").fetchall()
+    }
+    faltan = [(k, v) for k, v in _MAILER_DEFAULTS.items() if k not in existentes]
+    if faltan:
+        conn.executemany(
+            "INSERT OR IGNORE INTO email_settings (clave, valor) VALUES (?, ?)",
+            faltan,
+        )
 
 
 def repair_invalid_stages(conn=None) -> int:
