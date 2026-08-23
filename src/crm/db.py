@@ -121,6 +121,17 @@ def init_db():
             created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS app_links (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            categoria TEXT DEFAULT 'General',
+            titulo    TEXT NOT NULL,
+            url       TEXT NOT NULL,
+            para_que  TEXT DEFAULT '',
+            orden     INTEGER DEFAULT 100
+        )
+    """)
+    seed_app_links(conn)
     # Migraciones: añadir columnas a tablas ya existentes
     for stmt in [
         "ALTER TABLE leads ADD COLUMN perfil_origen TEXT DEFAULT ''",
@@ -278,7 +289,8 @@ def import_leads(leads: list[dict], perfil_origen: str = "") -> int:
     conn = get_conn()
 
     existing_keys = {
-        r["dedup_key"] for r in conn.execute("SELECT dedup_key FROM leads")
+        r["dedup_key"]
+        for r in conn.execute("SELECT dedup_key FROM leads").fetchall()
     }
 
     new_leads = []
@@ -317,7 +329,9 @@ def import_leads(leads: list[dict], perfil_origen: str = "") -> int:
             l.get("email_generico", ""),
             clean_text(l.get("sociedad", "")),
             normalize_stage(l.get("etapa")),
-            perfil_origen,
+            # El perfil del lote manda; si no se pasa, se respeta el que traiga
+            # el propio lead (restauración de backups, JSON ya etiquetado).
+            perfil_origen or l.get("perfil_origen", "") or "",
             key,
         )
         for l, nombre, key in new_leads
@@ -436,6 +450,104 @@ def update_lead_notes(lead_id: int, notas: str):
         "UPDATE leads SET notas = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
         (notas, lead_id),
     )
+    conn.commit()
+    conn.close()
+
+
+# ======================================================
+# ENLACES IMPORTANTES (tab Guía)
+# ======================================================
+
+# Se siembran una sola vez. A partir de ahí se editan desde la UI, para poder
+# añadir recursos sin tocar código. La URL de Turso y la del repo dependen de
+# la cuenta, así que se dejan vacías para que el usuario las complete.
+_LINKS_SEED = [
+    ("Operación", "Panel de Turso", "https://turso.tech/app",
+     "Ver y editar la base de datos cloud, sacar credenciales", 10),
+    ("Operación", "GitHub Actions del repo", "https://github.com/dguerrem/scrap-python/actions",
+     "Ver ejecuciones del scraper, logs y estado", 20),
+    ("Operación", "Streamlit Cloud", "https://share.streamlit.io/",
+     "Gestionar la app: reiniciar, ver logs, dormir/despertar", 30),
+    ("Configuración", "Secrets de GitHub", "https://github.com/dguerrem/scrap-python/settings/secrets/actions",
+     "TURSO_DATABASE_URL, TURSO_AUTH_TOKEN y los del mailer", 40),
+    ("Configuración", "Sharing de Streamlit", "https://share.streamlit.io/",
+     "Restringir quién puede ver el CRM (App settings → Sharing)", 50),
+    ("Google", "Admin de Google Workspace", "https://admin.google.com/",
+     "Gestión del correo, DKIM, dominios", 60),
+    ("Google", "Contraseñas de aplicación", "https://myaccount.google.com/apppasswords",
+     "Generar o revocar la credencial SMTP del mailer", 70),
+    ("Google", "Seguridad de la cuenta", "https://myaccount.google.com/security",
+     "Activar la verificación en 2 pasos (requisito del App Password)", 80),
+    ("Negocio", "Web de PsycoERP", "https://psycoerp.es",
+     "La landing del producto", 90),
+]
+
+
+def seed_app_links(conn=None) -> int:
+    """Siembra los enlaces por defecto la primera vez. Idempotente."""
+    own_conn = conn is None
+    conn = conn or get_conn()
+    try:
+        existe = conn.execute("SELECT COUNT(*) FROM app_links").fetchone()[0]
+    except Exception:
+        if own_conn:
+            conn.close()
+        return 0
+    if existe:
+        if own_conn:
+            conn.close()
+        return 0
+    conn.executemany(
+        "INSERT INTO app_links (categoria, titulo, url, para_que, orden) "
+        "VALUES (?, ?, ?, ?, ?)",
+        _LINKS_SEED,
+    )
+    conn.commit()
+    if own_conn:
+        conn.close()
+    return len(_LINKS_SEED)
+
+
+def get_app_links() -> list:
+    """Todos los enlaces, ordenados por categoría."""
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT * FROM app_links ORDER BY orden, categoria, titulo"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def save_app_link(categoria: str, titulo: str, url: str, para_que: str = "",
+                  orden: int = 100) -> int:
+    conn = get_conn()
+    conn.execute(
+        "INSERT INTO app_links (categoria, titulo, url, para_que, orden) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (categoria.strip() or "General", titulo.strip(), url.strip(),
+         para_que.strip(), int(orden)),
+    )
+    conn.commit()
+    conn.close()
+    return 1
+
+
+def update_app_link(link_id: int, categoria: str, titulo: str, url: str,
+                    para_que: str = "", orden: int = 100):
+    conn = get_conn()
+    conn.execute(
+        "UPDATE app_links SET categoria = ?, titulo = ?, url = ?, "
+        "para_que = ?, orden = ? WHERE id = ?",
+        (categoria.strip() or "General", titulo.strip(), url.strip(),
+         para_que.strip(), int(orden), link_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def delete_app_link(link_id: int):
+    conn = get_conn()
+    conn.execute("DELETE FROM app_links WHERE id = ?", (link_id,))
     conn.commit()
     conn.close()
 

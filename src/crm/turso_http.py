@@ -49,6 +49,15 @@ class _Cursor:
     def fetchone(self):
         return self._rows[0] if self._rows else None
 
+    # sqlite3.Cursor es iterable, así que `for r in conn.execute(...)` funciona
+    # en local y reventaba en cloud (BUG-5). Se implementa aquí para que las dos
+    # capas se comporten igual y la trampa no pueda volver.
+    def __iter__(self):
+        return iter(self._rows)
+
+    def __len__(self):
+        return len(self._rows)
+
 
 # ── Value conversion helpers ─────────────────────────────────────────────
 

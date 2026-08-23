@@ -161,10 +161,17 @@ check("un fallo de import fuerza la subida (no se pierden datos)",
       "ERROR importando a Turso" in wf and "upload = 'yes'" in wf)
 
 print("\n8) El semaforo de calidad ya no depende del director")
-app = (ROOT / "src/crm/app.py").read_text(encoding="utf-8")
-check("no se puntua por director",
-      "has_direct and has_director" not in app)
-check("verde = email directo", 'if lead["email_directo"]:\n                    quality = "🟢"' in app)
+# Tras la Fase 5 el semaforo vive en una funcion compartida por las vistas,
+# asi que se comprueba su comportamiento en vez de rastrear el codigo fuente.
+from src.crm.views._components import quality_icon
+check("verde = email directo",
+      quality_icon({"email_directo": "ana@clinica.es", "email_generico": ""}) == "🟢")
+check("amarillo = solo email generico",
+      quality_icon({"email_directo": "", "email_generico": "info@clinica.es"}) == "🟡")
+check("rojo = sin email",
+      quality_icon({"email_directo": "", "email_generico": ""}) == "🔴")
+check("el director no cambia el color",
+      quality_icon({"email_directo": "", "email_generico": "", "director": "Ana Ruiz"}) == "🔴")
 
 print("\n" + "=" * 46)
 print("RESULTADO:", "TODO OK" if ok else "HAY FALLOS")

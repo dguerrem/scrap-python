@@ -549,90 +549,70 @@ fugas de datos descritas en [Riesgos y sostenibilidad](#riesgos-y-sostenibilidad
 
 ---
 
-### Fase 5 — Refactor de UI + Guía rápida
+### Fase 5 — Refactor de UI + Guía rápida ✅ IMPLEMENTADA
+
+> **Estado:** implementada y probada en local (`tests/test_fase5.py`, 30 comprobaciones).
+> Pendiente de validación visual del usuario y de despliegue en cloud.
 
 Objetivo doble: **simplificar la interfaz** y añadir un **onboarding permanente** que sirva tanto de recordatorio tras semanas sin entrar como de guía para usuarios nuevos.
 
-#### 5.1 · Refactor estructural
+#### 5.1 · Refactor estructural ✅
 
-`src/crm/app.py` tiene ~700 líneas con todos los tabs en un único fichero. Se divide en:
+`src/crm/app.py` tenía ~720 líneas con todos los tabs en un único fichero. Ahora son **125 líneas** de bootstrap + barra lateral + routing:
 
 ```
 src/crm/
-├── app.py                # Solo layout, routing de tabs y bootstrap
-├── db.py
+├── app.py                # Solo layout, routing de tabs y bootstrap (125 líneas)
+├── db.py                 # + tabla app_links (enlaces de la Guía)
 ├── pipeline_runner.py
 ├── turso_http.py
 └── views/
-    ├── guia.py           # NUEVO — Guía rápida + URLs
+    ├── _components.py    # Caché, callbacks, semáforo y filtros compartidos
+    ├── guia.py           # NUEVO — Guía rápida + estado + URLs
     ├── kanban.py
     ├── tabla.py
     ├── detalle.py
     ├── scrap.py
-    └── emails.py         # NUEVO — Fase 6
+    └── emails.py         # Fase 6
 ```
 
-Además:
-- Extraer el CSS y los helpers repetidos (badges de calidad, formato de lead) a `views/_components.py`.
-- Centralizar la invalidación de caché en un único helper.
+- La invalidación de caché está centralizada en `views/_components.clear_cache()`.
+- Los callbacks de guardado (`on_notes_change`, `on_stage_change`, `move_lead`) viven en un único sitio, con los fixes de BUG-4 intactos.
+- El semáforo de calidad es ahora la función `quality_icon()`, testeable sin levantar la app.
 
-#### 5.2 · Simplificación de la interfaz
+#### 5.2 · Simplificación de la interfaz ✅
 
-Problemas actuales y solución propuesta:
+| Problema | Solución aplicada |
+| -------- | ----------------- |
+| El tab Scrap mezclaba estado de ejecución, perfiles y formulario en un scroll enorme | Estado fijo arriba · perfiles en el medio · formulario dentro de un expander que sólo se abre al editar |
+| Los filtros del Kanban y de la Tabla estaban duplicados y no compartían estado | **Barra de filtros única en el sidebar** (etapa, ciudad, origen, email) que alimenta Kanban, Tabla y Detalle. Contador de filtros activos y botón de limpiar |
+| Mover de etapa exigía abrir el expander y usar un selectbox | Botones **`→ siguiente etapa`** y **`✖ Descartar`** en la tarjeta. El selectbox completo y las notas quedan en un popover "Más" |
+| El sidebar acumulaba import, métricas y zona peligrosa | Métricas arriba → filtros → import y zona peligrosa colapsados |
+| No había feedback de qué significa cada icono de calidad | Leyenda en la Guía (`QUALITY_LEGEND`, fuente única compartida con el Kanban) |
+| El Detalle enterraba el email entre 10 campos | El email se muestra como titular; director, sociedad y genérico bajan a "Datos secundarios" |
+| No se podían exportar los leads filtrados | Botón **⬇️ Descargar CSV** en la Tabla, respeta los filtros activos |
 
-| Problema | Solución |
-| -------- | -------- |
-| El tab Scrap mezcla estado de ejecución, perfiles y formulario en un scroll enorme | Separar en sub-secciones colapsables, con el estado de ejecución fijo arriba |
-| Los filtros del Kanban y de la Tabla están duplicados y no comparten estado | Barra de filtros compartida en `session_state` |
-| Mover de etapa exige abrir el expander y usar un selectbox | Botones de acción rápida en la tarjeta (`→ Contactado`, `→ Descartado`) |
-| El sidebar acumula import, métricas y zona peligrosa | Reordenar: métricas arriba, import en medio, zona peligrosa colapsada |
-| No hay feedback de qué significa cada icono de calidad | Leyenda en la Guía rápida + tooltips |
+> **Detalle no obvio:** al mover un lead con los botones rápidos hay que **borrar de `session_state` la clave del selector de etapa** de ese lead. Si no, el selector seguiría mostrando la etapa vieja y al tocarlo devolvería el lead a donde estaba. Es el mismo tipo de trampa que provocó el BUG-4.
 
-#### 5.3 · Guía rápida (nuevo tab `📖 Guía`)
+#### 5.3 · Guía rápida (nuevo tab `📖 Guía`) ✅
 
-Primer tab de la app, visible al entrar. Contenido:
+Primer tab de la app, visible al entrar. Contenido implementado:
 
-**a) Flujo de trabajo en 4 pasos** — diagrama y explicación corta:
+**a) 📡 Estado del sistema** — lo primero que se ve: métricas (leads, con email, contactados, cerrados) y tabla en vivo con la BD en uso (☁️ Turso / 💾 SQLite), el estado del robot de scraping (ejecutándose, terminó bien, falló, nunca lanzada) y el mailer marcado como 🚧 pendiente hasta la Fase 6. Sin datos inventados.
 
-```
-1. Configurar perfil  →  2. Lanzar scrap  →  3. Revisar leads  →  4. Activar envíos
-```
+**b) 🚦 Flujo de trabajo en 4 pasos** — cada paso dice *qué botón tocar* y *qué pasa por debajo*.
 
-**b) Chuleta de acciones frecuentes** — tabla de "quiero hacer X → dónde se hace".
+**c) 🧭 Chuleta "quiero… ¿dónde se hace?"** — 8 acciones frecuentes con su ruta exacta.
 
-**c) Glosario** — qué es un perfil de scrap, qué significa cada etapa, qué implica cada color de lead (🟢🟡🟠🔴), qué es "autonomía".
+**d) 📖 Glosario** — colores de lead, las 6 etapas explicadas una a una y vocabulario del proyecto (lead, perfil, scraper, enricher, Turso, Actions, artifact).
 
-**d) Estado del sistema** — semáforo en vivo:
-- ¿Hay pipeline corriendo?
-- ¿Está el mailer activo?
-- ¿Cuántos días de autonomía quedan?
-- ¿Está la BD en local o en cloud?
-- **¿Cuándo fue el último envío?** (detecta el cron apagado — ver riesgo E)
-- **¿Cuándo fue el último backup?**
+**e) 🔗 Enlaces importantes** — tabla `app_links` en BD, **editable desde la propia UI** (añadir, editar, borrar). Se siembra la primera vez con Turso, Actions, Streamlit, secrets, Google Workspace, App Passwords y la web de PsycoERP. Idempotente: no se duplica al reiniciar.
 
-**e) 🔗 Enlaces importantes** — sección de URLs, que es donde vive todo lo que hoy se olvida:
+**f) ⚠️ Cosas que no puedes olvidar** — repo público, cron a los 60 días, la app duerme a las 12 h, sharing privado, revisar cuotas cada 6 meses.
 
-| Recurso | Para qué |
-| ------- | -------- |
-| Dashboard de Turso | Ver/editar la BD cloud, sacar credenciales |
-| App en Streamlit Cloud | La URL del CRM |
-| Secrets de Streamlit | Donde se configuran `TURSO_*`, `GITHUB_*`, SMTP |
-| **Sharing de Streamlit** | **Restringir quién puede ver el CRM** (ver RIESGO-C) |
-| GitHub Actions del repo | Ver ejecuciones, logs y artifacts |
-| Secrets de GitHub | Donde se configuran los secrets de CI |
-| Admin de Google Workspace | Gestión del correo, DKIM, App Passwords |
-| Contraseñas de aplicación de Google | Generar/revocar la credencial SMTP |
-| Web de PsycoERP | La landing del producto |
+**Mejora colateral en `import_leads()`:** si no se pasa `perfil_origen`, ahora se respeta el que traiga el propio lead en vez de vaciarlo. Igual que con la etapa en BUG-2, hace falta para que la restauración de backups de la Fase 6.8 no pierda información.
 
-> Las URLs se guardan en una tabla `app_links` editable desde la propia UI, no hardcodeadas. Así se pueden añadir recursos sin tocar código.
-
-**f) ⚠️ Recordatorios de mantenimiento** — lo que se olvida y rompe el sistema:
-
-- **El repositorio debe seguir siendo público** — es lo que sostiene la gratuidad ([por qué](#️-el-repositorio-público-es-load-bearing)).
-- **Los cron se desactivan a los 60 días sin actividad** — el job de backup semanal lo evita, pero conviene saberlo.
-- Revisar cuotas de terceros cada 6 meses.
-
-**Test de validación:** entrar en la app sin contexto previo y ser capaz de lanzar un scrap y activar los envíos usando **solo** la guía.
+**Test de validación:** entrar en la app sin contexto previo y ser capaz de lanzar un scrap usando **solo** la guía.
 
 ---
 

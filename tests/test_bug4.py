@@ -96,7 +96,11 @@ check("sigue habiendo 1 sola escritura tras 5 reruns",
 
 print("\n3) Interactuar con otro widget tampoco reescribe las notas")
 ESCRITURAS["notas"].clear()
-at.selectbox(key="detail_lead").select("Clinica Beta (Madrid)").run()
+# La etiqueta del selector lleva el semaforo delante desde la Fase 5, asi que
+# se busca la opcion por el nombre en vez de escribirla entera.
+_opt_beta = next(o for o in at.selectbox(key="detail_lead").options
+                 if "Clinica Beta" in o)
+at.selectbox(key="detail_lead").select(_opt_beta).run()
 at.run()
 check("0 escrituras al cambiar de lead", len(ESCRITURAS["notas"]) == 0,
       str(ESCRITURAS["notas"]))
