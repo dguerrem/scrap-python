@@ -176,7 +176,7 @@ scrap-python/
 
 ## Bugs detectados
 
-Auditoría del código actual. **Los cuatro están corregidos y verificados.**
+Auditoría del código actual. **Todos están corregidos y verificados.**
 
 | Bug | Qué provocaba | Estado |
 | --- | ------------- | ------ |
@@ -184,6 +184,7 @@ Auditoría del código actual. **Los cuatro están corregidos y verificados.**
 | BUG-2 | Una etapa inválida tumbaba la app entera | ✅ `tests/test_bug2.py` |
 | BUG-3 | Se perdían 3 de 311 leads en cada import | ✅ `tests/test_bug3.py` |
 | BUG-4 | Notas y etapas se sobrescribían entre leads | ✅ `tests/test_bug4.py` |
+| BUG-5 | El import a Turso reventaba: `'_Cursor' object is not iterable` | ✅ `tests/test_bug5.py` |
 | RIESGO-A | Los logs públicos exponían nombres y emails | ✅ `tests/test_fase4_riesgos.py` |
 | RIESGO-B | Los artifacts los descargaba cualquiera | ✅ `tests/test_fase4_riesgos.py` |
 | RIESGO-D | Un scraping bloqueado terminaba en verde | ✅ `tests/test_fase4_riesgos.py` |
@@ -289,6 +290,42 @@ Lo mismo ocurría con el selector de etapa: cambiar de lead podía mover al sigu
 **Test:** `python tests/test_bug4.py` — 8 bloques que levantan la app real con `streamlit.testing.v1.AppTest` y cuentan las escrituras a BD.
 
 **Severidad:** Alta (revisada al alza) — además del coste de cuota, sobrescribía notas y etapas entre leads.
+
+---
+
+### ✅ BUG-5 · El import a Turso reventaba sólo en cloud — **RESUELTO**
+
+**Archivos:** `src/crm/db.py` (`import_leads`) y `src/crm/turso_http.py` (`_Cursor`)
+
+Introducido por el propio fix del BUG-3. En producción:
+
+```
+ERROR importando a Turso: TypeError: '_Cursor' object is not iterable
+```
+
+El código nuevo recorría el cursor directamente:
+
+```python
+existing_keys = {r["dedup_key"] for r in conn.execute("SELECT dedup_key FROM leads")}
+```
+
+`sqlite3.Cursor` **es iterable**; el cursor de nuestra capa HTTP de Turso **no lo era** (sólo tenía `fetchall()` y `fetchone()`). Resultado: los tests pasaban en local y el import moría en cloud, después de 13 minutos de scraping.
+
+**Consecuencia real:** en el run del 22/08 los 31 leads enriquecidos **no entraron en Turso**. No se perdieron porque el fallback de RIESGO-B los publicó como artifact, pero hubo que importarlos a mano.
+
+**Fix aplicado:**
+1. `.fetchall()` explícito en `import_leads()`.
+2. `__iter__` y `__len__` en `_Cursor`, para que las dos capas se comporten igual y la trampa no pueda repetirse.
+
+**Lo importante no es el fix, es el test.** El problema de fondo es que **local y cloud no son el mismo SQLite**, y ningún test local lo detectaba. `tests/test_bug5.py` ejecuta el código real de `db.py` contra un doble que habla **exactamente igual que `TursoConnection`** (mismos objetos `Row` y `_Cursor`, `commit()` que no hace nada) pero guarda en un SQLite temporal. Cualquier uso de una característica exclusiva de `sqlite3` (`rowcount`, `lastrowid`, iterar el cursor…) explota ahora en local.
+
+Cubre `init_db`, `import_leads`, `import_from_json` con el JSON real del scraper, la deduplicación, y las 13 operaciones del CRM.
+
+**Verificado por mutación:** revirtiendo los dos ficheros al estado de producción, el test reproduce el error exacto (`'_Cursor' object is not iterable`).
+
+**Severidad:** Alta — bloqueaba por completo la entrada de datos en cloud, que es el modo de uso normal.
+
+**Lección para el futuro:** todo código nuevo en `db.py` debe pasar por `tests/test_bug5.py` antes de pushear.
 
 ---
 
@@ -544,8 +581,14 @@ fugas de datos descritas en [Riesgos y sostenibilidad](#riesgos-y-sostenibilidad
 - ~~Revisar el log público de un run → **no aparece ningún nombre, email ni director**.~~ ✅ **validado** (`python tests/test_fase4_riesgos.py`)
 - ~~Forzar un scraping que no encuentre resultados → el workflow termina en **rojo**, no en verde.~~ ✅ **validado**
 
-> **Fase 4 completada.** Los 4 bugs y los 3 riesgos de exposición están cerrados y cubiertos por
-> tests. Falta únicamente confirmar RIESGO-A y RIESGO-B **en un run real** de Actions.
+> **Fase 4 completada y validada en producción** (run del 22/08, Murcia):
+> - **RIESGO-A ✅** — el log sólo muestra hashes: `✓ <41cae9> | 4.9★ | 150 rev | Murcia`,
+>   `○ <8beeed> — sin datos de enriquecimiento`. Ni nombres ni emails, ni en scraper ni en enricher.
+> - **RIESGO-B ✅** — los artifacts se publicaron *porque el import falló*, que es exactamente el
+>   caso para el que existe la excepción. En la ruta normal no se publica nada.
+> - **RIESGO-D ✅** — cubierto por test; pendiente de que ocurra un bloqueo real.
+> - **BUG-5 descubierto en ese mismo run** — ver arriba. El fallback de RIESGO-B evitó la pérdida
+>   de los 31 leads enriquecidos.
 
 ---
 
