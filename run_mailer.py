@@ -20,6 +20,7 @@ Modos de prueba (variables de entorno):
 
 import argparse
 import logging
+import os
 import sys
 import time
 from pathlib import Path
@@ -42,6 +43,36 @@ def _avisar_modos():
     modos = config.modo_prueba_activo()
     if modos:
         log.info("MODO PRUEBA: %s", " · ".join(modos))
+
+
+def cmd_gate() -> int:
+    """¿Debe el cron seguir adelante? Escribe `activo=0|1` en GITHUB_OUTPUT.
+
+    Sale siempre en 0. Un cron que corre cada 5 minutos con el mailer apagado
+    no es un error: es lo normal mientras se prueba en local. Si esto fallara,
+    GitHub mandaría un aviso de workflow roto cada 5 minutos.
+    """
+    activo = False
+    motivo = "mailer apagado"
+    try:
+        store.asegurar_esquema()
+        activo = store.get_setting("activo", "0") == "1"
+    except Exception as e:
+        # Sin acceso a la base de datos tampoco se puede enviar. Se avisa,
+        # pero no se rompe el workflow.
+        motivo = f"no se pudo leer la configuración ({type(e).__name__})"
+        print(f"::warning::{motivo}")
+
+    salida = os.environ.get("GITHUB_OUTPUT")
+    if salida:
+        with open(salida, "a", encoding="utf-8") as f:
+            f.write(f"activo={'1' if activo else '0'}\n")
+
+    if activo:
+        log.info("Mailer ENCENDIDO: se continúa.")
+    else:
+        log.info("No se hace nada: %s.", motivo)
+    return 0
 
 
 def cmd_status():
@@ -261,7 +292,14 @@ def main():
                         help="Borra los datos de prueba y su rastro")
     parser.add_argument("--forget", metavar="DOMINIO",
                         help="Saca un dominio del ledger (vuelve a ser contactable)")
+    parser.add_argument("--gate", action="store_true",
+                        help="Para el cron: dice si el mailer está encendido")
     args = parser.parse_args()
+
+    # --gate se ejecuta antes que nada y no debe fallar nunca: es lo que
+    # decide si el resto del workflow tiene sentido.
+    if args.gate:
+        return cmd_gate()
 
     store.asegurar_esquema()
 

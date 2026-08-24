@@ -311,6 +311,43 @@ ajustes = store.all_settings()
 sospechosas = [k for k in ajustes if "password" in k.lower() or "smtp" in k.lower()]
 check("no hay claves SMTP en email_settings", not sospechosas, str(sospechosas))
 
+print("\n20) El cron no se queja cuando el mailer está apagado")
+# Sin esto, GitHub mandaría un aviso de workflow roto cada 5 minutos durante
+# todo el tiempo que el mailer esté apagado.
+import run_mailer
+
+salida_gh = TMP / "github_output.txt"
+os.environ["GITHUB_OUTPUT"] = str(salida_gh)
+
+store.set_setting("activo", "0")
+codigo = run_mailer.cmd_gate()
+check("con el mailer apagado sale en verde", codigo == 0, str(codigo))
+check("y avisa al workflow de que no siga",
+      "activo=0" in salida_gh.read_text(), salida_gh.read_text())
+
+salida_gh.write_text("")
+store.set_setting("activo", "1")
+codigo = run_mailer.cmd_gate()
+check("con el mailer encendido deja continuar",
+      codigo == 0 and "activo=1" in salida_gh.read_text(),
+      salida_gh.read_text())
+
+# Si Turso no responde, tampoco se puede enviar: se avisa, pero sin romper
+# el workflow ni dejar el cron en rojo.
+salida_gh.write_text("")
+original = store.get_setting
+store.get_setting = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("Turso caído"))
+try:
+    codigo = run_mailer.cmd_gate()
+finally:
+    store.get_setting = original
+check("si la base de datos no responde, no rompe el cron",
+      codigo == 0 and "activo=0" in salida_gh.read_text(),
+      salida_gh.read_text())
+
+store.set_setting("activo", "0")
+os.environ.pop("GITHUB_OUTPUT")
+
 print("\n" + "=" * 46)
 print("RESULTADO:", "TODO OK" if ok else "HAY FALLOS")
 print("=" * 46)

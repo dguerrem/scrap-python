@@ -739,6 +739,8 @@ queda en la cabecera `X-Original-To` para poder auditarlo.
 | `--reset-test`, `--forget` y `--perfil` | El diseño no contemplaba deshacer una prueba, y la primera que hice quemó un dominio real |
 | El backup se cifra con GPG y va a un artifact | Un repositorio privado aparte era una pieza más que mantener; el artifact cifrado con `BACKUP_PASSPHRASE` da la misma garantía |
 | El keepalive commitea `.github/keepalive.txt` | Las ejecuciones de workflow no cuentan como actividad: GitHub mira los commits |
+| `run_mailer.py --gate` antes de cualquier otro paso del cron | Con el mailer apagado, el workflow salía en rojo cada 5 minutos y GitHub avisaba por correo de cada fallo |
+| El keepalive se ejecuta con `if: always()` | Si no, un backup roto acabaría apagando también el cron del mailer a los 60 días, en silencio |
 
 
 #### Reglas de negocio (inamovibles)
@@ -1042,6 +1044,26 @@ concurrency:
 ```
 
 **Por qué la ventana UTC es más amplia que la real:** el cron de Actions es UTC y España cambia de huso dos veces al año. Se define un rango amplio y **es el script quien decide** con `zoneinfo("Europe/Madrid")` si son las 08:00-15:00 locales. El horario de verano se resuelve solo, para siempre.
+
+##### El portero (`--gate`)
+
+El primer paso del workflow no envía: solo pregunta a la base de datos si el interruptor
+está encendido, y escribe `activo=0|1` en `GITHUB_OUTPUT`. Los demás pasos van condicionados
+a eso.
+
+Existe porque el cron dispara **~120 veces al día**. Sin el portero, un mailer apagado —o
+unos secrets sin poner— dejaban el workflow en rojo en cada una de esas 120 ejecuciones,
+con su correspondiente correo de GitHub. Un cron que se queja 120 veces al día se acaba
+ignorando, y el día que la queja sea de verdad tampoco se leerá.
+
+Reglas del portero:
+
+- **Sale en 0 siempre.** Que el mailer esté apagado no es un error.
+- **Si Turso no responde, asume apagado** y deja un `::warning::` (amarillo, no rojo).
+  Sin base de datos no se puede enviar, pero tampoco es motivo para romper el workflow.
+- **Las credenciales solo se exigen si toca enviar.** Ahí sí, fallo en rojo.
+- `workflow_dispatch` con `forzar = true` **se salta el portero**: es la vía explícita
+  para la prueba de humo.
 
 ##### Limitaciones asumidas de GitHub Actions
 

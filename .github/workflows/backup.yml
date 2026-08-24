@@ -58,6 +58,9 @@ jobs:
           retention-days: 90
 
       - name: Keepalive
+        # Va siempre, aunque el backup falle. Si no, un backup roto acabaría
+        # apagando también el cron del mailer a los 60 días, sin avisar.
+        if: always()
         run: |
           mkdir -p .github
           date -u +"Ultimo backup: %Y-%m-%d %H:%M UTC" > .github/keepalive.txt

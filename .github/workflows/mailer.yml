@@ -46,15 +46,21 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: ¿Está encendido el mailer?
+        id: gate
+        run: python run_mailer.py --gate
+
       - name: Comprobar que hay credenciales
+        if: steps.gate.outputs.activo == '1' || inputs.forzar
         run: |
           if [ -z "${SMTP_USER}" ] || [ -z "${SMTP_APP_PASSWORD}" ]; then
-            echo "::error::Faltan los secrets SMTP_USER / SMTP_APP_PASSWORD"
+            echo "::error::Hay que enviar, pero faltan los secrets SMTP_USER / SMTP_APP_PASSWORD"
             exit 1
           fi
           echo "Credenciales presentes."
 
       - name: Enviar
+        if: steps.gate.outputs.activo == '1' || inputs.forzar
         env:
           EMAIL_DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
         run: |
@@ -63,5 +69,6 @@ jobs:
           python run_mailer.py $ARGS
 
       - name: Revisar autonomía y avisos
+        if: steps.gate.outputs.activo == '1' || inputs.forzar
         continue-on-error: true
         run: python run_mailer.py --autonomy
