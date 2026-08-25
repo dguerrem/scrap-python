@@ -30,9 +30,9 @@ PLANTILLA_PRUEBA = {
     "asunto": "Mejorar la gestión de {nombre}",
     "cuerpo": (
         "Hola, equipo de {nombre}:\n\n"
-        "Soy David Guerrero, fundador de PsycoERP. He desarrollado este software "
-        "para ayudar a clínicas de psicología a reducir el tiempo dedicado a su "
-        "gestión diaria.\n\n"
+        "Somos el equipo de PsycoERP. Hemos desarrollado este software para ayudar "
+        "a clínicas de psicología a reducir el tiempo dedicado a su gestión "
+        "diaria.\n\n"
         "PsycoERP centraliza las citas y bonos, los recordatorios por WhatsApp, "
         "los historiales clínicos y el control de ingresos por profesional. Se "
         "adapta a la forma de trabajar de cada equipo y se instala en un servidor "
@@ -40,10 +40,9 @@ PLANTILLA_PRUEBA = {
         "de plataformas de terceros.\n\n"
         "Me gustaría saber si este enfoque podría ayudaros a liberar horas de "
         "trabajo administrativo.\n\n"
-        "Si os encaja, respondedme a este correo y os cuento más.\n\n"
+        "Si os encaja, podéis responder a este correo y os contamos más.\n\n"
         "Un saludo,\n\n"
-        "David Guerrero\n"
-        "Fundador de PsycoERP\n"
+        "Equipo de PsycoERP\n"
         "https://psycoerp.es"
     ),
 }
