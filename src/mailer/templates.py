@@ -26,13 +26,25 @@ PIE_BAJA = (
 # Plantilla mínima para las pruebas en local. El copy de verdad se redacta
 # aparte (6.7 del README).
 PLANTILLA_PRUEBA = {
-    "nombre": "Prueba local",
-    "asunto": "Mail de prueba — {nombre}",
+    "nombre": "Correo frio v2",
+    "asunto": "Mejorar la gestión de {nombre}",
     "cuerpo": (
-        "Hola {nombre},\n\n"
-        "Mail de prueba, esta es mi web y ofrezco estos servicios:\n"
-        "https://psycoerp.es\n\n"
-        "Un saludo,"
+        "Hola, equipo de {nombre}:\n\n"
+        "Soy David Guerrero, fundador de PsycoERP. He desarrollado este software "
+        "para ayudar a clínicas de psicología a reducir el tiempo dedicado a su "
+        "gestión diaria.\n\n"
+        "PsycoERP centraliza las citas y bonos, los recordatorios por WhatsApp, "
+        "los historiales clínicos y el control de ingresos por profesional. Se "
+        "adapta a la forma de trabajar de cada equipo y se instala en un servidor "
+        "propio, para que la clínica mantenga el control de sus datos sin depender "
+        "de plataformas de terceros.\n\n"
+        "Me gustaría saber si este enfoque podría ayudaros a liberar horas de "
+        "trabajo administrativo.\n\n"
+        "Si os encaja, respondedme a este correo y os cuento más.\n\n"
+        "Un saludo,\n\n"
+        "David Guerrero\n"
+        "Fundador de PsycoERP\n"
+        "https://psycoerp.es"
     ),
 }
 
