@@ -19,7 +19,7 @@ DATA_DIR = Path(__file__).resolve().parents[3] / "data"
 CITIES_OPTIONS = [
     "Madrid", "Barcelona", "Valencia", "Sevilla", "Málaga",
     "Bilbao", "Zaragoza", "Murcia", "Palma de Mallorca",
-    "Las Palmas de Gran Canaria",
+    "Las Palmas de Gran Canaria", "Pontevedra",
 ]
 
 WEB_OPTIONS = {

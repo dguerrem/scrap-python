@@ -17,6 +17,7 @@ CITIES = [
     "Murcia",
     "Palma de Mallorca",
     "Las Palmas de Gran Canaria",
+    "Pontevedra",
 ]
 
 # Plantilla de búsqueda (no tocar {city}, se reemplaza automáticamente)
