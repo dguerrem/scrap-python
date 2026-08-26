@@ -141,7 +141,17 @@ check("la Guia explica el flujo", "Cómo se usa esto" in texto)
 check("la Guia lista los enlaces", "Enlaces importantes" in texto)
 check("la Guia avisa del repo publico", "Cosas que no puedes olvidar" in texto)
 
-print("\n7) Los filtros de la barra lateral llegan a los tabs")
+print("\n7) El encolado ajusta la cantidad al cambiar filtros")
+at.slider(key="mail_q_cantidad").set_value(2).run()
+at.selectbox(key="mail_q_calidad").select("Sólo email directo").run()
+check("reducir resultados no rompe el slider", not at.exception,
+      str(at.exception[0].message) if at.exception else "")
+check("la cantidad baja al nuevo máximo",
+      at.session_state["mail_q_cantidad"] == 1,
+      str(at.session_state["mail_q_cantidad"]))
+at.selectbox(key="mail_q_calidad").select("Todos").run()
+
+print("\n8) Los filtros de la barra lateral llegan a los tabs")
 at.selectbox(key="f_email").select("Sin email").run()
 check("sin excepciones al filtrar", not at.exception,
       str(at.exception[0].message) if at.exception else "")
@@ -151,7 +161,7 @@ check("el Kanban solo muestra el lead sin email",
       str([e.label for e in at.get("expander")]))
 at.selectbox(key="f_email").select("Todos").run()
 
-print("\n8) Botones de accion rapida")
+print("\n9) Botones de accion rapida")
 
 
 def _ss(key):

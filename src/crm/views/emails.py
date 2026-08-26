@@ -146,8 +146,20 @@ def _encolar():
     # Los de email directo primero: llegan a quien decide.
     seleccion.sort(key=lambda l: (not l.get("email_directo"), l["nombre"]))
 
-    cantidad = st.slider("Cuántos encolar", 1, max(1, len(seleccion)),
-                         min(10, len(seleccion)) or 1, key="mail_q_cantidad")
+    if not seleccion:
+        st.info("No hay contactos que encajen con esos filtros.")
+        return
+
+    max_cantidad = len(seleccion)
+    cantidad_guardada = st.session_state.get("mail_q_cantidad")
+    if cantidad_guardada is not None and not 1 <= cantidad_guardada <= max_cantidad:
+        st.session_state["mail_q_cantidad"] = max_cantidad
+    if max_cantidad == 1:
+        st.session_state["mail_q_cantidad"] = 1
+        cantidad = 1
+    else:
+        cantidad = st.slider("Cuántos encolar", 1, max_cantidad,
+                             min(10, max_cantidad), key="mail_q_cantidad")
 
     st.caption(
         f"Encajan **{len(seleccion)}** contactos con esos filtros. "
