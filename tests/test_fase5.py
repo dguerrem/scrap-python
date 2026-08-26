@@ -143,13 +143,19 @@ check("la Guia avisa del repo publico", "Cosas que no puedes olvidar" in texto)
 
 print("\n7) El encolado ajusta la cantidad al cambiar filtros")
 at.slider(key="mail_q_cantidad").set_value(2).run()
-at.selectbox(key="mail_q_calidad").select("Sólo email directo").run()
+at.multiselect(key="mail_q_ciudad").set_value(["Madrid"])
+at.multiselect(key="mail_q_perfil").set_value(["Perfil 1"])
+at.selectbox(key="mail_q_calidad").select("Sólo email directo")
+next(b for b in at.button if b.label == "Aplicar filtros").click().run()
 check("reducir resultados no rompe el slider", not at.exception,
       str(at.exception[0].message) if at.exception else "")
 check("la cantidad baja al nuevo máximo",
       at.session_state["mail_q_cantidad"] == 1,
       str(at.session_state["mail_q_cantidad"]))
-at.selectbox(key="mail_q_calidad").select("Todos").run()
+at.multiselect(key="mail_q_ciudad").set_value([])
+at.multiselect(key="mail_q_perfil").set_value([])
+at.selectbox(key="mail_q_calidad").select("Todos")
+next(b for b in at.button if b.label == "Aplicar filtros").click().run()
 
 print("\n8) Los filtros de la barra lateral llegan a los tabs")
 at.selectbox(key="f_email").select("Sin email").run()

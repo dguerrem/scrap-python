@@ -129,13 +129,15 @@ def _encolar():
     ciudades = sorted({l.get("ciudad") or "(sin ciudad)" for l in disponibles})
     perfiles = sorted({l.get("perfil_origen") or "(sin perfil)" for l in disponibles})
 
-    c1, c2, c3 = st.columns(3)
-    f_ciudad = c1.multiselect("Ciudad", ciudades, placeholder="Todas",
-                              key="mail_q_ciudad")
-    f_perfil = c2.multiselect("Perfil", perfiles, placeholder="Todos",
-                              key="mail_q_perfil")
-    f_calidad = c3.selectbox("Calidad", ["Todos", "Sólo email directo"],
-                             key="mail_q_calidad")
+    with st.form("mail_q_filtros"):
+        c1, c2, c3 = st.columns(3)
+        f_ciudad = c1.multiselect("Ciudad", ciudades, placeholder="Todas",
+                                  key="mail_q_ciudad")
+        f_perfil = c2.multiselect("Perfil", perfiles, placeholder="Todos",
+                                  key="mail_q_perfil")
+        f_calidad = c3.selectbox("Calidad", ["Todos", "Sólo email directo"],
+                                 key="mail_q_calidad")
+        st.form_submit_button("Aplicar filtros")
 
     seleccion = [
         l for l in disponibles
