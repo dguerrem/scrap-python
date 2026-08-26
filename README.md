@@ -1317,12 +1317,75 @@ sin actividad. Un job semanal —y su commit asociado— garantiza que eso no oc
 | Feature | Motivo del aplazamiento |
 | ------- | ----------------------- |
 | **Reposición automática de leads** | El tick detecta autonomía baja y dispara solo el scraper vía GH API (`pipeline_runner` ya sabe hacerlo). Aplazado: primero hay que confiar en el sistema manualmente |
+| **Provincias configurables desde BD** | Sustituir `CITIES_OPTIONS` y `config.CITIES` por un catálogo persistente compartido por SQLite y Turso. Evita desplegar código cada vez que se amplía el territorio |
 | Tracking de aperturas y clicks | ❌ Descartado. Requiere endpoint HTTP público; Streamlit no sirve |
 | Detección de respuestas vía IMAP | ❌ Descartado por ahora. Sería un segundo tick con `imaplib` |
 | Secuencias de seguimiento (follow-ups) | Incompatible con la regla "1 solo impacto" |
 | Integración con Hunter.io | Fallback de emails cuando la extracción web falla |
 | Export a Notion / Airtable | — |
 | Dashboard de conversión | Métricas por ciudad, perfil y plantilla |
+
+#### Fase 7.1 · Provincias configurables desde la base de datos
+
+**Problema actual:** el selector del CRM usa `CITIES_OPTIONS` en `views/scrap.py` y el
+scraper mantiene otra lista en `scraper/config.py`. Añadir Pontevedra u otra provincia exige
+editar dos ficheros, hacer commit y desplegar. Las listas pueden quedar desincronizadas.
+
+**Objetivo:** guardar en BD el catálogo completo de provincias españolas y usarlo como única
+fuente de verdad para perfiles, selector del CRM y valores predeterminados del scraper.
+
+**Modelo propuesto:**
+
+```sql
+CREATE TABLE locations (
+   id         INTEGER PRIMARY KEY AUTOINCREMENT,
+   nombre     TEXT NOT NULL,
+   activa     INTEGER NOT NULL DEFAULT 1,
+   orden      INTEGER NOT NULL DEFAULT 100
+);
+CREATE UNIQUE INDEX idx_locations_nombre ON locations(nombre);
+```
+
+- Sembrar de forma idempotente las 50 provincias y Ceuta/Melilla durante `init_db()`.
+- Conservar tildes y nombres oficiales para mostrarlos y construir la búsqueda de Maps.
+- `activa=0` permite ocultar una provincia sin borrarla ni romper perfiles existentes.
+- `orden` mantiene un desplegable estable; por defecto, orden alfabético.
+- El catálogo no contiene datos personales y debe incluirse en backup y restauración.
+
+**Cambios necesarios:**
+
+1. Añadir en `db.py` las operaciones `seed_locations()`, `get_locations()` y
+  `set_location_active()`, compatibles con SQLite y Turso.
+2. Eliminar `CITIES_OPTIONS` de `views/scrap.py`; el multiselect leerá las provincias activas
+  desde BD mediante la caché compartida de `_components.py`.
+3. Eliminar `CITIES` como catálogo de `scraper/config.py`. Si un perfil no selecciona ninguna
+  provincia, el lanzador debe resolver en BD todas las provincias activas y escribir la lista
+  concreta en `active_profile.json` o en los inputs de GitHub Actions.
+4. Mantener compatibles los perfiles existentes: sus ciudades guardadas siguen siendo válidas
+  aunque una provincia esté inactiva; al editar el perfil deben mostrarse para no perder datos.
+5. Añadir en el tab de Scrap una sección de administración sencilla para activar/desactivar
+  provincias. No permitir nombres libres duplicados ni variantes como `Malaga`/`Málaga`.
+6. Incluir `locations` en `run_backup.py` y en la restauración completa.
+7. El pipeline cloud no debe consultar una BD distinta para decidir ciudades a mitad del run:
+  recibe una instantánea explícita al lanzarse, igual que el resto del perfil.
+
+**Migración y despliegue:**
+
+- La primera ejecución crea y siembra la tabla sin modificar perfiles existentes.
+- Durante una versión de transición puede mantenerse un fallback interno solo para arrancar una
+  BD antigua; una vez verificada la siembra local/cloud, la BD pasa a ser la única fuente.
+- No borrar las listas Python hasta comprobar que un perfil vacío funciona tanto localmente como
+  desde GitHub Actions.
+
+**Pruebas de aceptación:**
+
+- Una BD vacía recibe exactamente 52 ubicaciones sin duplicarlas al reiniciar.
+- Pontevedra aparece en el selector sin editar código ni redesplegar.
+- Desactivar una provincia la oculta al crear perfiles nuevos, pero no altera perfiles guardados.
+- Un perfil sin selección ejecuta todas las provincias activas, nunca una lista local obsoleta.
+- La misma selección llega al scraper en local y cloud.
+- Backup y restauración conservan catálogo, estado activo y orden.
+- `tests/test_bug5.py` cubre todas las operaciones nuevas contra el doble de Turso.
 
 ---
 
