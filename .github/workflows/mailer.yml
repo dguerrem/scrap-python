@@ -5,7 +5,7 @@ on:
     # Cada 5 minutos, de 5 a 17 UTC, de lunes a viernes.
     # El rango es ancho a propósito: la ventana real (hora española,
     # con su cambio de horario) la decide Python en src/mailer/scheduler.py.
-    - cron: "*/5 5-17 * * 1-5"
+    - cron: "2-57/5 5-17 * * 1-5"
   workflow_dispatch:
     inputs:
       forzar:
