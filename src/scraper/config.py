@@ -18,6 +18,7 @@ CITIES = [
     "Palma de Mallorca",
     "Las Palmas de Gran Canaria",
     "Pontevedra",
+    "Vigo",
 ]
 
 # Plantilla de búsqueda (no tocar {city}, se reemplaza automáticamente)
