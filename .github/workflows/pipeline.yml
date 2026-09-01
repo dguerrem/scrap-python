@@ -59,17 +59,18 @@ jobs:
         run: |
           MODE="${{ inputs.mode }}"
           CITIES="${{ inputs.cities }}"
-          CITIES_ARG=""
           if [ -n "$CITIES" ]; then
-            CITIES_ARG="--cities $CITIES"
+            CITIES_ARG=(--cities "$CITIES")
+          else
+            CITIES_ARG=()
           fi
 
           if [ "$MODE" = "scraper" ]; then
-            python run_scraper.py --headless --profile data/active_profile.json $CITIES_ARG
+            python run_scraper.py --headless --profile data/active_profile.json "${CITIES_ARG[@]}"
           elif [ "$MODE" = "enricher" ]; then
             python run_enricher.py --headless --run-id ci-run
           else
-            python run_pipeline.py --headless --profile data/active_profile.json $CITIES_ARG
+            python run_pipeline.py --headless --profile data/active_profile.json "${CITIES_ARG[@]}"
           fi
 
       - name: Auto-import leads to Turso
