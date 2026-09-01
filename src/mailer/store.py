@@ -48,6 +48,23 @@ def a_fecha(texto: str):
 # DOMINIOS
 # ======================================================
 
+# Proveedores públicos: el dominio no identifica a la clínica.
+DOMINIOS_GENERICOS: frozenset[str] = frozenset({
+    "gmail.com", "googlemail.com",
+    "hotmail.com", "hotmail.es",
+    "outlook.com", "outlook.es",
+    "yahoo.com", "yahoo.es",
+    "live.com", "live.es",
+    "icloud.com", "me.com", "msn.com",
+})
+
+
+def clave_unica(email: str) -> str:
+    """Email completo para proveedores genéricos; dominio para el resto."""
+    d = dominio_de(email)
+    return (email or "").strip().lower() if d in DOMINIOS_GENERICOS else d
+
+
 def dominio_de(email: str) -> str:
     """Dominio normalizado de un email: minúsculas y sin `www.`.
 
@@ -201,7 +218,9 @@ def encolar(lead_id: int, destinatario: str, asunto: str,
     dominio = dominio_de(destinatario)
     if not dominio:
         return False
-    if en_ledger(dominio) or en_supresion(dominio):
+    # Para dominios genéricos la clave es el email; para corporativos, el dominio.
+    clave = clave_unica(destinatario)
+    if en_ledger(clave) or en_supresion(dominio):
         return False
 
     conn = get_conn()
@@ -212,7 +231,7 @@ def encolar(lead_id: int, destinatario: str, asunto: str,
         "INSERT OR IGNORE INTO email_queue "
         "(lead_id, destinatario, dominio, asunto, cuerpo_texto, cuerpo_html, "
         " estado, created_at) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)",
-        (lead_id, destinatario, dominio, asunto, cuerpo_texto, cuerpo_html,
+        (lead_id, destinatario, clave, asunto, cuerpo_texto, cuerpo_html,
          a_texto(ahora())),
     )
     despues = conn.execute("SELECT COUNT(*) FROM email_queue").fetchone()[0]

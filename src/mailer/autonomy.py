@@ -49,11 +49,11 @@ def contactables() -> list:
         lead = dict(row)
         email = _email_de(lead)
         dominio = store.dominio_de(email)
-        # Dos clínicas del mismo dominio cuentan como un solo contacto: sólo
-        # se puede llamar una vez a esa puerta.
-        if not dominio or dominio in fuera or dominio in vistos:
+        # Para genéricos la clave es el email; evita banear gmail.com entero.
+        clave = store.clave_unica(email)
+        if not dominio or clave in fuera or clave in vistos:
             continue
-        vistos.add(dominio)
+        vistos.add(clave)
         lead["email"] = email
         lead["dominio"] = dominio
         salida.append(lead)
