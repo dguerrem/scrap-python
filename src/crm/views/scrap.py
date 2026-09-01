@@ -20,6 +20,7 @@ CITIES_OPTIONS = [
     "Madrid", "Barcelona", "Valencia", "Sevilla", "Málaga",
     "Bilbao", "Zaragoza", "Murcia", "Palma de Mallorca",
     "Las Palmas de Gran Canaria", "Pontevedra", "Vigo",
+    "Ourense", "Lugo", "A Coruña", "Santiago de Compostela",
 ]
 
 WEB_OPTIONS = {

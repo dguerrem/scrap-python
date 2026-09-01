@@ -19,6 +19,10 @@ CITIES = [
     "Las Palmas de Gran Canaria",
     "Pontevedra",
     "Vigo",
+    "Ourense",
+    "Lugo",
+    "A Coruña",
+    "Santiago de Compostela",
 ]
 
 # Plantilla de búsqueda (no tocar {city}, se reemplaza automáticamente)
