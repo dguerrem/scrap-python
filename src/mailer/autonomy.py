@@ -27,8 +27,9 @@ def contactables() -> list:
     conn = get_conn()
     leads = conn.execute(
         "SELECT id, nombre, ciudad, perfil_origen, email_directo, email_generico "
-        "FROM leads WHERE (email_directo != '' AND email_directo IS NOT NULL) "
-        "   OR (email_generico != '' AND email_generico IS NOT NULL)"
+        "FROM leads WHERE (email_directo != '' AND email_directo IS NOT NULL "
+        "   OR email_generico != '' AND email_generico IS NOT NULL) "
+        "   AND etapa != 'Descartado'"
     ).fetchall()
     gastados = {
         r["dominio"] for r in conn.execute("SELECT dominio FROM email_ledger").fetchall()
