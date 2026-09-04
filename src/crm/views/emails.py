@@ -154,14 +154,17 @@ def _encolar():
 
     max_cantidad = len(seleccion)
     cantidad_guardada = st.session_state.get("mail_q_cantidad")
-    if cantidad_guardada is not None and not 1 <= cantidad_guardada <= max_cantidad:
+    if cantidad_guardada is None:
+        st.session_state["mail_q_cantidad"] = min(10, max_cantidad)
+    elif not 1 <= cantidad_guardada <= max_cantidad:
         st.session_state["mail_q_cantidad"] = max_cantidad
     if max_cantidad == 1:
         st.session_state["mail_q_cantidad"] = 1
         cantidad = 1
     else:
+        # Sin value= aquí: el valor ya se fija arriba vía session_state.
         cantidad = st.slider("Cuántos encolar", 1, max_cantidad,
-                             min(10, max_cantidad), key="mail_q_cantidad")
+                             key="mail_q_cantidad")
 
     st.caption(
         f"Encajan **{len(seleccion)}** contactos con esos filtros. "
