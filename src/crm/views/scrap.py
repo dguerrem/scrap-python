@@ -17,12 +17,13 @@ from src.crm.views import _components as ui
 DATA_DIR = Path(__file__).resolve().parents[3] / "data"
 
 CITIES_OPTIONS = [
-    "A Coruña", "A Estrada", "Barcelona", "Bilbao", "Cangas do Morrazo",
-    "Lalín", "Las Palmas de Gran Canaria", "Lugo", "Madrid", "Málaga",
-    "Marín", "Moaña", "Murcia", "Nigrán", "O Porriño", "Ourense",
-    "Palma de Mallorca", "Ponteareas", "Pontevedra", "Redondela",
-    "Santiago de Compostela", "Sevilla", "Valencia", "Vigo",
-    "Vilagarcía de Arousa", "Zaragoza",
+    "A Coruña", "A Estrada", "Ames", "Arteixo", "Barcelona", "Bilbao",
+    "Boiro", "Cambre", "Cangas do Morrazo", "Carballo", "Culleredo",
+    "Ferrol", "Lalín", "Las Palmas de Gran Canaria", "Lugo", "Madrid",
+    "Málaga", "Marín", "Moaña", "Murcia", "Narón", "Nigrán",
+    "O Porriño", "Oleiros", "Ourense", "Palma de Mallorca", "Ponteareas",
+    "Pontevedra", "Redondela", "Ribeira", "Santiago de Compostela",
+    "Sevilla", "Valencia", "Vigo", "Vilagarcía de Arousa", "Zaragoza",
 ]
 
 WEB_OPTIONS = {
