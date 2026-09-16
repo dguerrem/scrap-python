@@ -18,12 +18,11 @@ DATA_DIR = Path(__file__).resolve().parents[3] / "data"
 
 CITIES_OPTIONS = [
     "A Coruña", "A Estrada", "Ames", "Arteixo", "Avilés", "Barcelona", "Bilbao",
-    "Boiro", "Cambre", "Cangas do Morrazo", "Carballo", "Culleredo",
-    "Ferrol", "Gijón", "Lalín", "Las Palmas de Gran Canaria", "Lugo", "Madrid",
-    "Málaga", "Marín", "Moaña", "Murcia", "Narón", "Nigrán",
-    "O Porriño", "Oleiros", "Ourense", "Oviedo", "Palma de Mallorca", "Ponteareas",
-    "Pontevedra", "Redondela", "Ribeira", "Santiago de Compostela",
-    "Sevilla", "Valencia", "Vigo", "Vilagarcía de Arousa", "Zaragoza",
+    "Boiro", "Cambre", "Camargo", "Cangas do Morrazo", "Carballo", "Castro-Urdiales",
+    "Culleredo", "El Astillero", "Ferrol", "Gijón", "Lalín", "Las Palmas de Gran Canaria",
+    "Laredo", "Los Corrales de Buelna", "Lugo", "Madrid", "Málaga", "Marín", "Moaña", "Murcia", "Narón", "Nigrán", "O Porriño", "Oleiros", "Ourense", "Oviedo", "Palma de Mallorca", "Piélagos",
+    "Ponteareas", "Pontevedra", "Redondela", "Ribeira", "Santa Cruz de Bezana", "Santander",
+    "Santiago de Compostela", "Santoña", "Sevilla", "Torrelavega", "Valencia", "Vigo", "Vilagarcía de Arousa", "Zaragoza",
 ]
 
 WEB_OPTIONS = {
