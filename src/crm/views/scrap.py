@@ -17,12 +17,20 @@ from src.crm.views import _components as ui
 DATA_DIR = Path(__file__).resolve().parents[3] / "data"
 
 CITIES_OPTIONS = [
-    "A Coruña", "A Estrada", "Ames", "Arteixo", "Avilés", "Barcelona", "Bilbao",
-    "Boiro", "Cambre", "Camargo", "Cangas do Morrazo", "Carballo", "Castro-Urdiales",
-    "Culleredo", "El Astillero", "Ferrol", "Gijón", "Lalín", "Las Palmas de Gran Canaria",
-    "Laredo", "Los Corrales de Buelna", "Lugo", "Madrid", "Málaga", "Marín", "Moaña", "Murcia", "Narón", "Nigrán", "O Porriño", "Oleiros", "Ourense", "Oviedo", "Palma de Mallorca", "Piélagos",
-    "Ponteareas", "Pontevedra", "Redondela", "Ribeira", "Santa Cruz de Bezana", "Santander",
-    "Santiago de Compostela", "Santoña", "Sevilla", "Torrelavega", "Valencia", "Vigo", "Vilagarcía de Arousa", "Zaragoza",
+    "A Coruña", "A Estrada", "Ames", "Arteixo", "Astorga", "Avilés",
+    "Barcelona", "Bembibre", "Bilbao", "Boiro", "Camargo", "Camponaraya",
+    "Cambre", "Cangas do Morrazo", "Carballo", "Castro-Urdiales",
+    "Cacabelos", "Culleredo", "El Astillero", "Fabero", "Ferrol", "Gijón",
+    "La Bañeza", "La Robla", "Lalín", "Las Palmas de Gran Canaria",
+    "Laredo", "León", "Los Corrales de Buelna", "Lugo", "Madrid", "Málaga",
+    "Marín", "Moaña", "Murcia", "Narón", "Nigrán", "O Porriño", "Oleiros",
+    "Ourense", "Oviedo", "Palma de Mallorca", "Piélagos", "Ponferrada",
+    "Ponteareas", "Pontevedra", "Redondela", "Ribeira",
+    "San Andrés del Rabanedo", "Santa Cruz de Bezana", "Santander",
+    "Santiago de Compostela", "Santoña", "Sariegos", "Sevilla",
+    "Torrelavega", "Valencia", "Valencia de Don Juan", "Valverde de la Virgen",
+    "Vigo", "Villaquilambre", "Villablino", "Vilagarcía de Arousa",
+    "Zaragoza",
 ]
 
 WEB_OPTIONS = {
