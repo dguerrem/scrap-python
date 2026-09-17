@@ -143,6 +143,8 @@ def init_db():
         # la calculará en el siguiente arranque.
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_dedup_key "
         "ON leads(dedup_key) WHERE dedup_key != ''",
+        "CREATE INDEX IF NOT EXISTS idx_leads_etapa_puntuacion "
+        "ON leads(etapa, puntuacion DESC, resenas DESC)",
     ]:
         try:
             conn.execute(stmt)
@@ -788,4 +790,3 @@ def delete_scrap_profile(profile_id: int):
     conn.execute("DELETE FROM scrap_profiles WHERE id = ?", (profile_id,))
     conn.commit()
     conn.close()
-

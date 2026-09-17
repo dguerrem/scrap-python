@@ -17,6 +17,8 @@ _SIGUIENTE = {
     "Demo": "Cerrado",
 }
 
+_MAX_LEADS_PER_STAGE = 20
+
 
 def render(criterios: dict):
     st.caption(
@@ -29,10 +31,17 @@ def render(criterios: dict):
     for i, stage in enumerate(PIPELINE_STAGES):
         with cols[i]:
             leads = ui.apply_filters(ui.c_get_leads_by_stage(stage), criterios)
-            st.markdown(f"**{stage}**  ·  `{len(leads)}`")
+            total = len(leads)
+            leads = leads[:_MAX_LEADS_PER_STAGE]
+            st.markdown(f"**{stage}**  ·  `{total}`")
 
             if not leads:
                 st.caption("—")
+            elif total > len(leads):
+                st.caption(
+                    f"Mostrando los {len(leads)} priorizados. "
+                    "Usa Tabla para ver y filtrar todos."
+                )
 
             for lead in leads:
                 quality = ui.quality_icon(lead)

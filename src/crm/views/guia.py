@@ -168,7 +168,7 @@ def _estado():
 
     if pipeline_runner.is_cloud():
         if pipeline_runner.cloud_configured():
-            s = pipeline_runner.get_cloud_status()
+            s = ui.c_get_cloud_status()
             if s and s.get("status") == "running":
                 estado, detalle = "⏳ Ejecutándose", "Mira el tab Scrap"
             elif s:

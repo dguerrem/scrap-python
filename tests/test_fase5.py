@@ -2,7 +2,7 @@
 Fase 5 — refactor de UI, filtros compartidos y tab Guia.
 
 Comprueba que:
-  1. La app arranca con los 5 tabs y sin excepciones
+  1. La app arranca con navegación por secciones y sin excepciones
   2. Los filtros de la barra lateral afectan a Kanban, Tabla y Detalle a la vez
   3. Los botones de accion rapida mueven el lead y no dejan selectores obsoletos
   4. Los enlaces de la Guia se siembran una vez y se pueden editar
@@ -127,14 +127,12 @@ check("rojo sin email",
       quality_icon({"email_directo": "", "email_generico": "",
                     "director": "Ana Ruiz"}) == "🔴")
 
-print("\n6) La app arranca entera, con sus 5 tabs")
+print("\n6) La app arranca con navegación por secciones")
 at = AppTest.from_file(str(ROOT / "src/crm/app.py"), default_timeout=60)
 at.run()
 check("sin excepciones", not at.exception,
       str(at.exception[0].message) if at.exception else "")
-etiquetas = [t.label for t in at.tabs] if hasattr(at, "tabs") else []
-check("el primer tab es la Guia",
-      any("Guía" in e for e in etiquetas) if etiquetas else True, str(etiquetas))
+check("la sección inicial es la Guía", at.radio(key="app_page").value == "📖 Guía")
 
 texto = " ".join(str(m.value) for m in at.markdown)
 check("la Guia explica el flujo", "Cómo se usa esto" in texto)
@@ -142,6 +140,7 @@ check("la Guia lista los enlaces", "Enlaces importantes" in texto)
 check("la Guia avisa del repo publico", "Cosas que no puedes olvidar" in texto)
 
 print("\n7) El encolado ajusta la cantidad al cambiar filtros")
+at.radio(key="app_page").set_value("📧 Emails").run()
 at.slider(key="mail_q_cantidad").set_value(2).run()
 at.multiselect(key="mail_q_ciudad").set_value(["Madrid"])
 at.multiselect(key="mail_q_perfil").set_value(["Perfil 1"])
@@ -158,6 +157,7 @@ at.selectbox(key="mail_q_calidad").select("Todos")
 next(b for b in at.button if b.label == "Aplicar filtros").click().run()
 
 print("\n8) Los filtros de la barra lateral llegan a los tabs")
+at.radio(key="app_page").set_value("📋 Kanban").run()
 at.selectbox(key="f_email").select("Sin email").run()
 check("sin excepciones al filtrar", not at.exception,
       str(at.exception[0].message) if at.exception else "")

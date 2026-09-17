@@ -80,6 +80,7 @@ def etapa_en_bd(lead_id):
 at = AppTest.from_file(str(ROOT / "src" / "crm" / "app.py"), default_timeout=90)
 at.run()
 check("la app arranca sin excepciones", not at.exception, str(at.exception))
+at.radio(key="app_page").set_value("🔍 Detalle").run()
 
 print("\n1) Escribir una nota provoca UNA sola escritura")
 ESCRITURAS["notas"].clear()
@@ -135,6 +136,7 @@ check("3 reruns no reescriben la etapa", len(ESCRITURAS["etapa"]) == 1,
 
 print("\n7) El Kanban se comporta igual")
 ESCRITURAS["notas"].clear()
+at.radio(key="app_page").set_value("📋 Kanban").run()
 at.text_area(key=f"notas_{ID_A}").set_value("Nota desde el Kanban").run()
 check("1 escritura", len(ESCRITURAS["notas"]) == 1, str(ESCRITURAS["notas"]))
 check("guardada en Alfa", notas_en_bd(ID_A) == "Nota desde el Kanban", notas_en_bd(ID_A))

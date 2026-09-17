@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from src.crm import pipeline_runner
 from src.crm.db import (
     get_all_leads, get_leads_by_stage, get_stats, get_scrap_profiles,
     get_app_links, update_lead_stage, update_lead_notes, PIPELINE_STAGES,
@@ -43,6 +44,12 @@ def c_get_scrap_profiles():
 @st.cache_data(ttl=300)
 def c_get_app_links():
     return get_app_links()
+
+
+@st.cache_data(ttl=15)
+def c_get_cloud_status():
+    """Evita consultar GitHub varias veces durante los reruns cercanos."""
+    return pipeline_runner.get_cloud_status()
 
 
 def clear_cache():

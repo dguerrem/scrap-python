@@ -60,13 +60,14 @@ def _estado_cloud() -> bool:
         )
         return False
 
-    cloud_status = pipeline_runner.get_cloud_status()
+    cloud_status = ui.c_get_cloud_status()
     is_running = bool(cloud_status and cloud_status.get("status") == "running")
 
     if is_running:
         @st.fragment(run_every=10)
         def _live_cloud():
-            s = pipeline_runner.get_cloud_status()
+            ui.c_get_cloud_status.clear()
+            s = ui.c_get_cloud_status()
             if not s or s.get("status") != "running":
                 ui.clear_cache()
                 st.rerun()

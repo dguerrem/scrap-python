@@ -41,7 +41,13 @@ st.set_page_config(
     layout="wide",
 )
 
-init_db()
+@st.cache_resource
+def _initialize_database():
+    """Inicializa el esquema una vez por proceso, no en cada interacción."""
+    init_db()
+
+
+_initialize_database()
 
 
 # ======================================================
@@ -96,50 +102,48 @@ def _sidebar_peligro():
 with st.sidebar:
     st.title("🧠 PsycoLead CRM")
 
-    _stats = ui.c_get_stats()
-    _m1, _m2 = st.columns(2)
-    _m1.metric("Leads", _stats["total"])
-    _m2.metric("Con email", _stats["con_email"])
+    page = st.radio(
+        "Sección",
+        ["📖 Guía", "📋 Kanban", "📊 Tabla", "🔍 Detalle", "📧 Emails", "⚙️ Scrap"],
+        key="app_page",
+        label_visibility="collapsed",
+    )
 
-    st.divider()
+    criterios = None
+    if page in ("📋 Kanban", "📊 Tabla", "🔍 Detalle"):
+        _stats = ui.c_get_stats()
+        _m1, _m2 = st.columns(2)
+        _m1.metric("Leads", _stats["total"])
+        _m2.metric("Con email", _stats["con_email"])
 
-    st.markdown("**🔎 Filtros**")
-    _all_leads = ui.c_get_all_leads()
-    criterios = ui.render_filters(_all_leads)
+        st.divider()
+        st.markdown("**🔎 Filtros**")
+        _all_leads = ui.c_get_all_leads()
+        criterios = ui.render_filters(_all_leads)
 
-    st.divider()
-
-    with st.expander("📥 Importar datos"):
-        _sidebar_importar()
-
-    with st.expander("⚠️ Zona peligrosa"):
-        _sidebar_peligro()
+    if page == "📊 Tabla":
+        st.divider()
+        with st.expander("📥 Importar datos"):
+            _sidebar_importar()
+        with st.expander("⚠️ Zona peligrosa"):
+            _sidebar_peligro()
 
     st.caption("PsycoERP · 2.500 € pago único")
 
 
 # ======================================================
-# TABS
+# ROUTING
 # ======================================================
 
-tab_guia, tab_kanban, tab_tabla, tab_detalle, tab_emails, tab_scrap = st.tabs(
-    ["📖 Guía", "📋 Kanban", "📊 Tabla", "🔍 Detalle", "📧 Emails", "⚙️ Scrap"]
-)
-
-with tab_guia:
+if page == "📖 Guía":
     guia.render()
-
-with tab_kanban:
+elif page == "📋 Kanban":
     kanban.render(criterios)
-
-with tab_tabla:
+elif page == "📊 Tabla":
     tabla.render(criterios)
-
-with tab_detalle:
+elif page == "🔍 Detalle":
     detalle.render(criterios)
-
-with tab_emails:
+elif page == "📧 Emails":
     emails.render()
-
-with tab_scrap:
+elif page == "⚙️ Scrap":
     scrap.render()
