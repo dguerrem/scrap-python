@@ -17,19 +17,19 @@ from src.crm.views import _components as ui
 DATA_DIR = Path(__file__).resolve().parents[3] / "data"
 
 CITIES_OPTIONS = [
-    "A Coruña", "A Estrada", "Ames", "Arteixo", "Astorga", "Avilés",
-    "Barcelona", "Bembibre", "Benavente", "Bilbao", "Boiro", "Burganes de Valverde",
-    "Camargo", "Camponaraya", "Cambre", "Cangas do Morrazo", "Carballo", "Castro-Urdiales",
-    "Cacabelos", "Culleredo", "El Astillero", "Fabero", "Ferrol", "Fermoselle", "Gijón",
-    "La Bañeza", "La Robla", "Lalín", "Las Palmas de Gran Canaria",
+    "A Coruña", "A Estrada", "Ames", "Alba de Tormes", "Arteixo", "Astorga", "Avilés",
+    "Barcelona", "Béjar", "Bembibre", "Benavente", "Bilbao", "Boiro", "Burganes de Valverde",
+    "Camargo", "Camponaraya", "Cambre", "Cangas do Morrazo", "Carbajosa de la Sagrada", "Carballo", "Castro-Urdiales",
+    "Cacabelos", "Ciudad Rodrigo", "Culleredo", "Doñinos de Salamanca", "El Astillero", "Fabero", "Ferrol", "Fermoselle", "Gijón",
+    "Guijuelo", "La Bañeza", "La Robla", "Lalín", "Las Palmas de Gran Canaria",
     "Laredo", "León", "Los Corrales de Buelna", "Lugo", "Madrid", "Málaga",
     "Marín", "Moaña", "Morales del Vino", "Murcia", "Narón", "Nigrán", "O Porriño", "Oleiros",
-    "Ourense", "Oviedo", "Palma de Mallorca", "Piélagos", "Ponferrada",
+    "Ourense", "Oviedo", "Palma de Mallorca", "Peñaranda de Bracamonte", "Piélagos", "Ponferrada",
     "Ponteareas", "Pontevedra", "Puebla de Sanabria", "Redondela", "Ribeira",
-    "San Andrés del Rabanedo", "Santa Cruz de Bezana", "Santander",
+    "Salamanca", "San Andrés del Rabanedo", "Santa Cruz de Bezana", "Santa Marta de Tormes", "Santander",
     "Santiago de Compostela", "Santoña", "Sariegos", "Sevilla",
     "Toro", "Torrelavega", "Valencia", "Valencia de Don Juan", "Valverde de la Virgen",
-    "Vigo", "Villaquilambre", "Villablino", "Villalpando", "Vilagarcía de Arousa",
+    "Vigo", "Villaquilambre", "Villablino", "Villalpando", "Villamayor", "Vilagarcía de Arousa",
     "Zamora", "Zaragoza",
 ]
 
