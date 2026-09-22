@@ -18,19 +18,19 @@ DATA_DIR = Path(__file__).resolve().parents[3] / "data"
 
 CITIES_OPTIONS = [
     "A Coruña", "A Estrada", "Ames", "Arteixo", "Astorga", "Avilés",
-    "Barcelona", "Bembibre", "Bilbao", "Boiro", "Camargo", "Camponaraya",
-    "Cambre", "Cangas do Morrazo", "Carballo", "Castro-Urdiales",
-    "Cacabelos", "Culleredo", "El Astillero", "Fabero", "Ferrol", "Gijón",
+    "Barcelona", "Bembibre", "Benavente", "Bilbao", "Boiro", "Burganes de Valverde",
+    "Camargo", "Camponaraya", "Cambre", "Cangas do Morrazo", "Carballo", "Castro-Urdiales",
+    "Cacabelos", "Culleredo", "El Astillero", "Fabero", "Ferrol", "Fermoselle", "Gijón",
     "La Bañeza", "La Robla", "Lalín", "Las Palmas de Gran Canaria",
     "Laredo", "León", "Los Corrales de Buelna", "Lugo", "Madrid", "Málaga",
-    "Marín", "Moaña", "Murcia", "Narón", "Nigrán", "O Porriño", "Oleiros",
+    "Marín", "Moaña", "Morales del Vino", "Murcia", "Narón", "Nigrán", "O Porriño", "Oleiros",
     "Ourense", "Oviedo", "Palma de Mallorca", "Piélagos", "Ponferrada",
-    "Ponteareas", "Pontevedra", "Redondela", "Ribeira",
+    "Ponteareas", "Pontevedra", "Puebla de Sanabria", "Redondela", "Ribeira",
     "San Andrés del Rabanedo", "Santa Cruz de Bezana", "Santander",
     "Santiago de Compostela", "Santoña", "Sariegos", "Sevilla",
-    "Torrelavega", "Valencia", "Valencia de Don Juan", "Valverde de la Virgen",
-    "Vigo", "Villaquilambre", "Villablino", "Vilagarcía de Arousa",
-    "Zaragoza",
+    "Toro", "Torrelavega", "Valencia", "Valencia de Don Juan", "Valverde de la Virgen",
+    "Vigo", "Villaquilambre", "Villablino", "Villalpando", "Vilagarcía de Arousa",
+    "Zamora", "Zaragoza",
 ]
 
 WEB_OPTIONS = {
