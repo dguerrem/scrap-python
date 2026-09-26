@@ -13,27 +13,15 @@ from src.crm.db import (
     update_scrap_profile, delete_scrap_profile,
 )
 from src.crm.views import _components as ui
+from src.scraper.config import LOCALITIES_BY_PROVINCE
 
 DATA_DIR = Path(__file__).resolve().parents[3] / "data"
 
-CITIES_OPTIONS = [
-    "A Coruña", "A Estrada", "Ames", "Aguilar de Campoo", "Alba de Tormes", "Arteixo", "Astorga", "Avilés",
-    "Barcelona", "Béjar", "Bembibre", "Benavente", "Bilbao", "Boiro", "Burganes de Valverde",
-    "Camargo", "Camponaraya", "Cambre", "Cangas do Morrazo", "Carbajosa de la Sagrada", "Carballo",
-    "Cervera de Pisuerga", "Castro-Urdiales", "Cacabelos", "Ciudad Rodrigo", "Culleredo", "Doñinos de Salamanca",
-    "Dueñas", "El Astillero", "Fabero", "Ferrol", "Fermoselle", "Gijón", "Grijota", "Guardo", "Guijuelo",
-    "Herrera de Pisuerga", "La Bañeza", "La Robla", "Lalín", "Las Palmas de Gran Canaria",
-    "Laredo", "León", "Los Corrales de Buelna", "Lugo", "Madrid", "Málaga",
-    "Marín", "Moaña", "Morales del Vino", "Murcia", "Narón", "Nigrán", "O Porriño", "Oleiros",
-    "Ourense", "Oviedo", "Palencia", "Palma de Mallorca",
-    "Peñaranda de Bracamonte", "Piélagos", "Ponferrada",
-    "Ponteareas", "Pontevedra", "Puebla de Sanabria", "Redondela", "Ribeira",
-    "Saldaña", "Salamanca", "San Andrés del Rabanedo", "Santa Cruz de Bezana", "Santa Marta de Tormes",
-    "Santander", "Santiago de Compostela", "Santoña", "Sariegos", "Sevilla",
-    "Toro", "Torrelavega", "Valencia", "Valencia de Don Juan", "Valverde de la Virgen",
-    "Vigo", "Villaquilambre", "Villablino", "Villalpando", "Villamayor", "Vilagarcía de Arousa",
-    "Villamuriel de Cerrato", "Venta de Baños", "Zamora", "Zaragoza",
-]
+CITY_TO_PROVINCE = {
+    city: province
+    for province, localities in LOCALITIES_BY_PROVINCE.items()
+    for city in localities
+}
 
 WEB_OPTIONS = {
     "Solo con web (vender software)": "required",
@@ -259,6 +247,41 @@ def _perfiles(in_cloud: bool, is_running: bool):
 def _formulario():
     edit_id = st.session_state.get("scrap_edit_id")
     editing = get_scrap_profile(edit_id) if edit_id else None
+    profile_key = str(editing["id"]) if editing else "new"
+    province_key = f"scrap_profile_provinces_{profile_key}"
+    cities_key = f"scrap_profile_cities_{profile_key}"
+
+    if cities_key not in st.session_state:
+        st.session_state[cities_key] = editing["ciudades"] if editing else []
+    if province_key not in st.session_state:
+        st.session_state[province_key] = sorted({
+            CITY_TO_PROVINCE[city]
+            for city in st.session_state[cities_key]
+            if city in CITY_TO_PROVINCE
+        })
+
+    f_provinces = st.multiselect(
+        "Provincias",
+        options=sorted(LOCALITIES_BY_PROVINCE),
+        key=province_key,
+        placeholder="Selecciona una o varias provincias",
+        help="Las localidades se filtran automáticamente por las provincias elegidas.",
+    )
+    selected_cities = st.session_state[cities_key]
+    province_cities = [
+        city
+        for province in f_provinces
+        for city in LOCALITIES_BY_PROVINCE[province]
+    ]
+    city_options = sorted(set(selected_cities) | set(province_cities))
+
+    if f_provinces:
+        st.caption(
+            f"{len(province_cities)} localidades disponibles en "
+            f"{', '.join(f_provinces)}."
+        )
+    else:
+        st.caption("Selecciona una provincia para mostrar sus localidades.")
 
     with st.form("scrap_profile_form", clear_on_submit=False):
         f_nombre = st.text_input(
@@ -272,10 +295,18 @@ def _formulario():
             help="Se reemplaza {city} por cada ciudad seleccionada.",
         )
         f_ciudades = st.multiselect(
-            "Ciudades",
-            options=CITIES_OPTIONS,
-            default=editing["ciudades"] if editing else CITIES_OPTIONS[:4],
-            help="Vacío = usa todas las ciudades del config.py",
+            "Localidades",
+            options=city_options,
+            key=cities_key,
+            format_func=lambda city: (
+                f"{city} ({CITY_TO_PROVINCE.get(city, 'Sin provincia')})"
+            ),
+            disabled=not city_options,
+            placeholder="Selecciona las localidades",
+            help=(
+                "Las localidades ya seleccionadas se conservan al cambiar "
+                "las provincias. Vacío = usa todas las localidades configuradas."
+            ),
         )
 
         col1, col2 = st.columns(2)
@@ -338,6 +369,8 @@ def _formulario():
                         f_auto_import,
                     )
                     st.success("✅ Perfil guardado")
+                st.session_state.pop(province_key, None)
+                st.session_state.pop(cities_key, None)
                 ui.clear_cache()
                 st.rerun()
 
