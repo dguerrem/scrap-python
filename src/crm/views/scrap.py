@@ -17,20 +17,22 @@ from src.crm.views import _components as ui
 DATA_DIR = Path(__file__).resolve().parents[3] / "data"
 
 CITIES_OPTIONS = [
-    "A Coruña", "A Estrada", "Ames", "Alba de Tormes", "Arteixo", "Astorga", "Avilés",
+    "A Coruña", "A Estrada", "Ames", "Aguilar de Campoo", "Alba de Tormes", "Arteixo", "Astorga", "Avilés",
     "Barcelona", "Béjar", "Bembibre", "Benavente", "Bilbao", "Boiro", "Burganes de Valverde",
-    "Camargo", "Camponaraya", "Cambre", "Cangas do Morrazo", "Carbajosa de la Sagrada", "Carballo", "Castro-Urdiales",
-    "Cacabelos", "Ciudad Rodrigo", "Culleredo", "Doñinos de Salamanca", "El Astillero", "Fabero", "Ferrol", "Fermoselle", "Gijón",
-    "Guijuelo", "La Bañeza", "La Robla", "Lalín", "Las Palmas de Gran Canaria",
+    "Camargo", "Camponaraya", "Cambre", "Cangas do Morrazo", "Carbajosa de la Sagrada", "Carballo",
+    "Cervera de Pisuerga", "Castro-Urdiales", "Cacabelos", "Ciudad Rodrigo", "Culleredo", "Doñinos de Salamanca",
+    "Dueñas", "El Astillero", "Fabero", "Ferrol", "Fermoselle", "Gijón", "Grijota", "Guardo", "Guijuelo",
+    "Herrera de Pisuerga", "La Bañeza", "La Robla", "Lalín", "Las Palmas de Gran Canaria",
     "Laredo", "León", "Los Corrales de Buelna", "Lugo", "Madrid", "Málaga",
     "Marín", "Moaña", "Morales del Vino", "Murcia", "Narón", "Nigrán", "O Porriño", "Oleiros",
-    "Ourense", "Oviedo", "Palma de Mallorca", "Peñaranda de Bracamonte", "Piélagos", "Ponferrada",
+    "Ourense", "Oviedo", "Palencia", "Palma de Mallorca",
+    "Peñaranda de Bracamonte", "Piélagos", "Ponferrada",
     "Ponteareas", "Pontevedra", "Puebla de Sanabria", "Redondela", "Ribeira",
     "Salamanca", "San Andrés del Rabanedo", "Santa Cruz de Bezana", "Santa Marta de Tormes", "Santander",
-    "Santiago de Compostela", "Santoña", "Sariegos", "Sevilla",
+    "Saldaña", "Salamanca", "Santiago de Compostela", "Santoña", "Sariegos", "Sevilla",
     "Toro", "Torrelavega", "Valencia", "Valencia de Don Juan", "Valverde de la Virgen",
     "Vigo", "Villaquilambre", "Villablino", "Villalpando", "Villamayor", "Vilagarcía de Arousa",
-    "Zamora", "Zaragoza",
+    "Villamuriel de Cerrato", "Venta de Baños", "Zamora", "Zaragoza",
 ]
 
 WEB_OPTIONS = {
