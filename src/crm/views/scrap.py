@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import html as _html
+import json
 from pathlib import Path
+from urllib.error import URLError
+from urllib.request import urlopen
 
+import pydeck as pdk
 import streamlit as st
 
 from src.crm import pipeline_runner
@@ -22,6 +26,24 @@ CITY_TO_PROVINCE = {
     for province, localities in LOCALITIES_BY_PROVINCE.items()
     for city in localities
 }
+PROVINCES_WITH_COVERAGE = frozenset(
+    province
+    for province, localities in LOCALITIES_BY_PROVINCE.items()
+    if len(localities) > 1
+)
+PROVINCE_GEOJSON_URL = (
+    "https://raw.githubusercontent.com/codeforgermany/click_that_hood/"
+    "main/public/data/spain-provinces.geojson"
+)
+GEOJSON_PROVINCE_NAMES = {
+    "Alacant/Alicante": "Alicante",
+    "Araba/Álava": "Álava",
+    "Bizkaia/Vizcaya": "Bizkaia",
+    "Castelló/Castellón": "Castellón",
+    "Gipuzkoa/Guipúzcoa": "Gipuzkoa",
+    "Santa Cruz De Tenerife": "Santa Cruz de Tenerife",
+    "València/Valencia": "Valencia",
+}
 
 WEB_OPTIONS = {
     "Solo con web (vender software)": "required",
@@ -35,6 +57,77 @@ MODE_OPTIONS = {
     "🗺️ Solo buscar clínicas (Google Maps)": "scraper",
     "🔍 Solo buscar emails de lo ya guardado": "enricher",
 }
+
+
+# ======================================================
+# COBERTURA GEOGRÁFICA
+# ======================================================
+
+@st.cache_data(ttl=86_400)
+def _load_provinces_geojson() -> dict:
+    """Carga y almacena la cartografía provincial durante un día."""
+    with urlopen(PROVINCE_GEOJSON_URL, timeout=10) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _render_coverage_map():
+    """Muestra las provincias con varias localidades configuradas en verde."""
+    try:
+        geojson = _load_provinces_geojson()
+    except (URLError, TimeoutError, json.JSONDecodeError) as error:
+        st.warning(f"No se pudo cargar el mapa de cobertura: {error}")
+        return
+
+    geojson["features"] = [
+        feature
+        for feature in geojson["features"]
+        if int(feature["properties"]["cod_prov"]) <= 50
+    ]
+    for feature in geojson["features"]:
+        properties = feature["properties"]
+        province = GEOJSON_PROVINCE_NAMES.get(
+            properties["name"], properties["name"]
+        )
+        covered = province in PROVINCES_WITH_COVERAGE
+        properties["province"] = province
+        properties["status"] = (
+            "Cobertura configurada" if covered else "Sin cobertura configurada"
+        )
+        properties["fill_color"] = [34, 197, 94] if covered else [100, 116, 139]
+
+    total = len(PROVINCES_WITH_COVERAGE)
+    st.markdown("### 🗺️ Cobertura de scraping por provincia")
+    st.caption(
+        f"🟢 {total} provincias con cobertura configurada · "
+        "⬜ Solo capital o sin localidades configuradas"
+    )
+    deck = pdk.Deck(
+        layers=[
+            pdk.Layer(
+                "GeoJsonLayer",
+                data=geojson,
+                opacity=0.8,
+                stroked=True,
+                filled=True,
+                get_fill_color="properties.fill_color",
+                get_line_color=[71, 85, 105],
+                get_line_width=1,
+                line_width_min_pixels=1,
+                pickable=True,
+                auto_highlight=True,
+            )
+        ],
+        initial_view_state=pdk.ViewState(
+            latitude=39.5, longitude=-3.7, zoom=3.7, pitch=0,
+        ),
+        map_style=None,
+        tooltip={"html": "<b>{province}</b><br/>{status}"},
+    )
+    st.pydeck_chart(deck, use_container_width=True, height=520)
+    st.caption(
+        "Verde: provincia con más de una localidad configurada. "
+        "Cartografía provincial: Click That 'Hood (MIT)."
+    )
 
 
 # ======================================================
@@ -389,6 +482,9 @@ def render():
     # El estado de ejecución va fijo arriba: es lo primero que quieres saber
     # al entrar en este tab.
     is_running = _estado_cloud() if in_cloud else _estado_local()
+
+    st.divider()
+    _render_coverage_map()
 
     st.divider()
 
