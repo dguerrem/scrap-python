@@ -49,12 +49,18 @@ LOCALITIES_BY_PROVINCE = {
         "Valverde de la Virgen", "Villaquilambre", "Villablino",
     ),
     "Lleida": (),
-    "Lugo": ("Lugo",),
+    "Lugo": (
+        "Burela", "Chantada", "Foz", "Guitiriz", "Lugo",
+        "Monforte de Lemos", "Ribadeo", "Sarria", "Vilalba", "Viveiro",
+    ),
     "Madrid": ("Madrid",),
     "Málaga": ("Málaga",),
     "Murcia": ("Murcia",),
     "Navarra": (),
-    "Ourense": ("Ourense",),
+    "Ourense": (
+        "A Rúa", "Allariz", "Barbadás", "Celanova", "O Barco de Valdeorras",
+        "O Carballiño", "Ourense", "Ribadavia", "Verín", "Xinzo de Limia",
+    ),
     "Palencia": (
         "Aguilar de Campoo", "Cervera de Pisuerga", "Dueñas", "Grijota",
         "Guardo", "Herrera de Pisuerga", "Palencia", "Saldaña",
