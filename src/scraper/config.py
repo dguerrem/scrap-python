@@ -18,7 +18,11 @@ LOCALITIES_BY_PROVINCE = {
     "Álava": (),
     "Asturias": ("Avilés", "Gijón", "Oviedo"),
     "Ávila": (),
-    "Badajoz": (),
+    "Badajoz": (
+        "Almendralejo", "Badajoz", "Don Benito", "Jerez de los Caballeros",
+        "Mérida", "Montijo", "Olivenza", "Villafranca de los Barros",
+        "Villanueva de la Serena", "Zafra",
+    ),
     "Illes Balears": ("Palma de Mallorca",),
     "Barcelona": ("Barcelona",),
     "Bizkaia": ("Bilbao",),
@@ -27,7 +31,11 @@ LOCALITIES_BY_PROVINCE = {
         "Medina de Pomar", "Miranda de Ebro", "Roa de Duero",
         "Salas de los Infantes", "Villarcayo de Merindad de Castilla la Vieja",
     ),
-    "Cáceres": (),
+    "Cáceres": (
+        "Arroyo de la Luz", "Cáceres", "Coria", "Jaraíz de la Vera",
+        "Miajadas", "Moraleja", "Navalmoral de la Mata", "Plasencia",
+        "Talayuela", "Trujillo",
+    ),
     "Cádiz": (),
     "Cantabria": (
         "Camargo", "Castro-Urdiales", "El Astillero", "Laredo",
