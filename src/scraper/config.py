@@ -22,7 +22,11 @@ LOCALITIES_BY_PROVINCE = {
     "Illes Balears": ("Palma de Mallorca",),
     "Barcelona": ("Barcelona",),
     "Bizkaia": ("Bilbao",),
-    "Burgos": (),
+    "Burgos": (
+        "Aranda de Duero", "Belorado", "Briviesca", "Burgos", "Lerma",
+        "Medina de Pomar", "Miranda de Ebro", "Roa de Duero",
+        "Salas de los Infantes", "Villarcayo de Merindad de Castilla la Vieja",
+    ),
     "Cáceres": (),
     "Cádiz": (),
     "Cantabria": (
