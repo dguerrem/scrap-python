@@ -17,7 +17,11 @@ LOCALITIES_BY_PROVINCE = {
     "Almería": (),
     "Álava": (),
     "Asturias": ("Avilés", "Gijón", "Oviedo"),
-    "Ávila": (),
+    "Ávila": (
+        "Ávila", "Arévalo", "Arenas de San Pedro", "Candeleda",
+        "Las Navas del Marqués", "Sotillo de la Adrada", "El Tiemblo",
+        "Cebreros", "La Adrada", "El Barco de Ávila",
+    ),
     "Badajoz": (
         "Almendralejo", "Badajoz", "Don Benito", "Jerez de los Caballeros",
         "Mérida", "Montijo", "Olivenza", "Villafranca de los Barros",
