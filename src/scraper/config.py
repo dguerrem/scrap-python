@@ -95,7 +95,11 @@ LOCALITIES_BY_PROVINCE = {
         "Villamayor",
     ),
     "Santa Cruz de Tenerife": (),
-    "Segovia": (),
+    "Segovia": (
+        "Segovia", "Cuéllar", "El Espinar", "Palazuelos de Eresma",
+        "Real Sitio de San Ildefonso", "La Lastrilla", "San Cristóbal de Segovia",
+        "Cantalejo", "Nava de la Asunción", "Carbonero el Mayor",
+    ),
     "Sevilla": ("Sevilla",),
     "Soria": (),
     "Tarragona": (),
