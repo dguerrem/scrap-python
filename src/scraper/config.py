@@ -101,7 +101,11 @@ LOCALITIES_BY_PROVINCE = {
         "Cantalejo", "Nava de la Asunción", "Carbonero el Mayor",
     ),
     "Sevilla": ("Sevilla",),
-    "Soria": (),
+    "Soria": (
+        "Soria", "Almazán", "El Burgo de Osma", "Ólvega", "Ágreda",
+        "San Esteban de Gormaz", "San Leonardo de Yagüe", "Golmayo",
+        "Duruelo de la Sierra", "Arcos de Jalón",
+    ),
     "Tarragona": (),
     "Teruel": (),
     "Toledo": (),
