@@ -29,7 +29,8 @@ LOCALITIES_BY_PROVINCE = {
     ),
     "Illes Balears": ("Palma de Mallorca",),
     "Barcelona": ("Barcelona",),
-    "Bizkaia": ("Bilbao",),
+    "Bizkaia": ("Barakaldo", "Basauri", "Bilbao", "Durango", "Galdakao",
+                    "Getxo", "Leioa", "Portugalete", "Santurtzi", "Sestao",),
     "Burgos": (
         "Aranda de Duero", "Belorado", "Briviesca", "Burgos", "Lerma",
         "Medina de Pomar", "Miranda de Ebro", "Roa de Duero",
