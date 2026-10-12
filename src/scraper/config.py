@@ -109,7 +109,10 @@ LOCALITIES_BY_PROVINCE = {
     ),
     "Tarragona": (),
     "Teruel": (),
-    "Toledo": (),
+    "Toledo": (
+        "Toledo", "Talavera de la Reina", "Illescas", "Seseña", "Torrijos",
+        "Fuensalida", "Yuncos", "Ocaña", "Quintanar de la Orden", "Mora",
+    ),
     "Valencia": ("Valencia",),
     "Valladolid": (
         "Arroyo de la Encomienda", "Cigales", "Íscar", "Laguna de Duero",
