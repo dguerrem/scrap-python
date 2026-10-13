@@ -48,7 +48,11 @@ LOCALITIES_BY_PROVINCE = {
         "Santander", "Santoña", "Torrelavega",
     ),
     "Castellón": (),
-    "Ciudad Real": (),
+    "Ciudad Real": (
+        "Ciudad Real", "Puertollano", "Tomelloso", "Alcázar de San Juan",
+        "Valdepeñas", "Manzanares", "Daimiel", "La Solana", "Campo de Criptana",
+        "Almagro",
+    ),
     "Córdoba": (),
     "Cuenca": (),
     "Girona": (),
