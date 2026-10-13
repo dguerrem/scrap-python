@@ -12,7 +12,10 @@ LOCALITIES_BY_PROVINCE = {
         "Culleredo", "Ferrol", "Narón", "Oleiros", "Ribeira",
         "Santiago de Compostela",
     ),
-    "Albacete": (),
+    "Albacete": (
+        "Albacete", "Hellín", "Villarrobledo", "Almansa", "La Roda",
+        "Caudete", "Tobarra", "La Gineta", "Tarazona de la Mancha", "Madrigueras",
+    ),
     "Alicante": (),
     "Almería": (),
     "Álava": (),
