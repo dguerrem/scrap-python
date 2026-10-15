@@ -65,7 +65,11 @@ LOCALITIES_BY_PROVINCE = {
     "Huelva": (),
     "Huesca": (),
     "Jaén": (),
-    "La Rioja": (),
+    "La Rioja": (
+        "Logroño", "Calahorra", "Arnedo", "Haro", "Lardero", "Alfaro",
+        "Nájera", "Villamediana de Iregua", "Santo Domingo de la Calzada",
+        "Autol",
+    ),
     "León": (
         "Astorga", "Bembibre", "Cacabelos", "Camponaraya", "Fabero",
         "La Bañeza", "La Robla", "León", "Ponferrada",
