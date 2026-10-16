@@ -65,7 +65,10 @@ LOCALITIES_BY_PROVINCE = {
     "Girona": (),
     "Granada": (),
     "Guadalajara": (),
-    "Gipuzkoa": (),
+    "Gipuzkoa": (
+        "Donostia/San Sebastián", "Irun", "Errenteria", "Eibar", "Zarautz",
+        "Arrasate/Mondragón", "Hernani", "Tolosa", "Lasarte-Oria", "Azpeitia",
+    ),
     "Huelva": (),
     "Huesca": (),
     "Jaén": (),
