@@ -52,6 +52,12 @@ def c_get_cloud_status():
     return pipeline_runner.get_cloud_status()
 
 
+@st.cache_data(ttl=15)
+def c_get_cloud_runs():
+    """Lista de los últimos runs de pipeline.yml (cacheada 15s)."""
+    return pipeline_runner.get_cloud_runs()
+
+
 def clear_cache():
     st.cache_data.clear()
 

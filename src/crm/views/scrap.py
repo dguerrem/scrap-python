@@ -143,49 +143,66 @@ def _estado_cloud() -> bool:
         )
         return False
 
-    cloud_status = ui.c_get_cloud_status()
-    is_running = bool(cloud_status and cloud_status.get("status") == "running")
+    runs = ui.c_get_cloud_runs()
+    running = [r for r in runs if r.get("status") == "running"]
+    is_running = bool(running)
 
     if is_running:
         @st.fragment(run_every=10)
         def _live_cloud():
-            ui.c_get_cloud_status.clear()
-            s = ui.c_get_cloud_status()
-            if not s or s.get("status") != "running":
+            ui.c_get_cloud_runs.clear()
+            s = ui.c_get_cloud_runs()
+            activos = [r for r in s if r.get("status") == "running"]
+            if not activos:
                 ui.clear_cache()
                 st.rerun()
                 return
-            st.info(
-                f"⏳ **Pipeline en ejecución** en GitHub Actions "
-                f"({s.get('gh_status', '')})"
-            )
-            url = s.get("html_url", "")
-            if url:
-                st.markdown(f"[🔗 Ver progreso en GitHub]({url})")
+            if len(activos) == 1:
+                r = activos[0]
+                st.info(
+                    f"⏳ **Pipeline en ejecución** en GitHub Actions "
+                    f"({r.get('gh_status', '')})"
+                )
+                url = r.get("html_url", "")
+                if url:
+                    st.markdown(f"[🔗 Ver progreso en GitHub]({url})")
+            else:
+                st.info(
+                    f"⏳ **{len(activos)} pipelines en ejecución** "
+                    f"en GitHub Actions"
+                )
+                for r in activos:
+                    titulo = r.get("display_title", "") or f"Run #{r.get('run_number', '')}"
+                    url = r.get("html_url", "")
+                    if url:
+                        st.markdown(f"- [{titulo}]({url})")
+                    else:
+                        st.markdown(f"- {titulo}")
 
         _live_cloud()
         return True
 
-    if cloud_status:
+    if runs:
         # La pipeline terminó — limpiar caché para reflejar los nuevos leads
         if "cloud_cache_cleared" not in st.session_state:
             ui.clear_cache()
             st.session_state["cloud_cache_cleared"] = True
 
+        ultimo = runs[0]
         icon = {"completed": "✅", "failed": "❌", "cancelled": "⛔"}.get(
-            cloud_status["status"], "❓"
+            ultimo["status"], "❓"
         )
-        url = cloud_status.get("html_url", "")
-        with st.expander(f"{icon} Última ejecución: {cloud_status['status']}"):
+        url = ultimo.get("html_url", "")
+        with st.expander(f"{icon} Última ejecución: {ultimo['status']}"):
             if url:
                 st.markdown(f"[🔗 Ver logs en GitHub Actions]({url})")
             st.caption(
-                f"Creada: {cloud_status.get('created_at', '')} — "
-                f"Actualizada: {cloud_status.get('updated_at', '')}"
+                f"Creada: {ultimo.get('created_at', '')} — "
+                f"Actualizada: {ultimo.get('updated_at', '')}"
             )
-            if cloud_status["status"] == "completed":
+            if ultimo["status"] == "completed":
                 st.success("Los leads se importaron automáticamente.")
-            elif cloud_status["status"] == "failed":
+            elif ultimo["status"] == "failed":
                 st.warning("La pipeline falló. Revisa los logs en GitHub Actions.")
     return False
 
@@ -303,10 +320,13 @@ def _perfiles(in_cloud: bool, is_running: bool):
                     list(MODE_OPTIONS.keys()),
                     key=f"mode_{p['id']}",
                 )
+                # En cloud (GitHub Actions) se pueden lanzar varias pipelines
+                # en paralelo; en local solo hay un proceso, así que se bloquea.
+                bloquear = is_running and not in_cloud
                 if st.button(
                     "🚀 Lanzar",
                     key=f"launch_{p['id']}",
-                    disabled=is_running,
+                    disabled=bloquear,
                     use_container_width=True,
                     type="primary",
                 ):
@@ -322,7 +342,7 @@ def _perfiles(in_cloud: bool, is_running: bool):
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error al lanzar: {e}")
-                if is_running:
+                if bloquear:
                     st.caption("⏳ Ya hay una pipeline en ejecución. Espera a que termine.")
 
             col_e, col_d = st.columns(2)

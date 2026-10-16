@@ -282,3 +282,52 @@ def get_cloud_status() -> dict | None:
         "created_at": run.get("created_at", ""),
         "updated_at": run.get("updated_at", ""),
     }
+
+
+def get_cloud_runs(limit: int = 10) -> list[dict]:
+    """
+    Lista de los últimos runs de pipeline.yml (más recientes primero).
+
+    Cada elemento es un dict con el mismo formato que `get_cloud_status()`,
+    más `run_number` y `display_title` para poder distinguirlos en la UI.
+    """
+    if not cloud_configured():
+        return []
+
+    try:
+        data = _gh_request(
+            "GET", f"/actions/workflows/pipeline.yml/runs?per_page={limit}"
+        )
+    except Exception:
+        return []
+
+    if not data:
+        return []
+
+    runs = data.get("workflow_runs", [])
+    result = []
+    for run in runs:
+        gh_status = run.get("status", "")
+        gh_conclusion = run.get("conclusion")
+
+        if gh_status in ("queued", "in_progress", "waiting", "pending"):
+            status = "running"
+        elif gh_conclusion == "success":
+            status = "completed"
+        elif gh_conclusion == "cancelled":
+            status = "cancelled"
+        else:
+            status = "failed"
+
+        result.append({
+            "status": status,
+            "gh_status": gh_status,
+            "gh_conclusion": gh_conclusion,
+            "html_url": run.get("html_url", ""),
+            "run_id": run.get("id", ""),
+            "run_number": run.get("run_number", ""),
+            "display_title": run.get("display_title", ""),
+            "created_at": run.get("created_at", ""),
+            "updated_at": run.get("updated_at", ""),
+        })
+    return result
