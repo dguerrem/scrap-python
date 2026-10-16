@@ -18,7 +18,11 @@ LOCALITIES_BY_PROVINCE = {
     ),
     "Alicante": (),
     "Almería": (),
-    "Álava": (),
+    "Álava": (
+        "Vitoria-Gasteiz", "Llodio", "Amurrio", "Salvatierra/Agurain",
+        "Oyón/Oion", "Iruña Oka/Iruña de Oca", "Alegría-Dulantzi",
+        "Ayala/Aiara", "Zuia", "Legutio",
+    ),
     "Asturias": ("Avilés", "Gijón", "Oviedo"),
     "Ávila": (
         "Ávila", "Arévalo", "Arenas de San Pedro", "Candeleda",
