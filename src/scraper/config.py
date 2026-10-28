@@ -48,7 +48,11 @@ LOCALITIES_BY_PROVINCE = {
         "Miajadas", "Moraleja", "Navalmoral de la Mata", "Plasencia",
         "Talayuela", "Trujillo",
     ),
-    "Cádiz": (),
+    "Cádiz": (
+        "Algeciras", "Arcos de la Frontera", "Cádiz", "Chiclana de la Frontera",
+        "El Puerto de Santa María", "Jerez de la Frontera", "La Línea de la Concepción",
+        "Puerto Real", "San Fernando", "Sanlúcar de Barrameda",
+    ),
     "Cantabria": (
         "Camargo", "Castro-Urdiales", "El Astillero", "Laredo",
         "Los Corrales de Buelna", "Piélagos", "Santa Cruz de Bezana",
