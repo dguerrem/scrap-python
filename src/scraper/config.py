@@ -69,7 +69,11 @@ LOCALITIES_BY_PROVINCE = {
         "Donostia/San Sebastián", "Irun", "Errenteria", "Eibar", "Zarautz",
         "Arrasate/Mondragón", "Hernani", "Tolosa", "Lasarte-Oria", "Azpeitia",
     ),
-    "Huelva": (),
+    "Huelva": (
+        "Aljaraque", "Almonte", "Ayamonte", "Huelva", "Isla Cristina",
+        "Lepe", "Moguer", "La Palma del Condado", "Punta Umbría",
+        "Valverde del Camino",
+    ),
     "Huesca": (),
     "Jaén": (),
     "La Rioja": (
