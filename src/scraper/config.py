@@ -68,7 +68,11 @@ LOCALITIES_BY_PROVINCE = {
     "Cuenca": (),
     "Girona": (),
     "Granada": (),
-    "Guadalajara": (),
+    "Guadalajara": (
+        "Azuqueca de Henares", "Cabanillas del Campo", "El Casar",
+        "Guadalajara", "Humanes", "Marchamalo", "Molina de Aragón",
+        "Sigüenza", "Torija", "Villanueva de la Torre",
+    ),
     "Gipuzkoa": (
         "Donostia/San Sebastián", "Irun", "Errenteria", "Eibar", "Zarautz",
         "Arrasate/Mondragón", "Hernani", "Tolosa", "Lasarte-Oria", "Azpeitia",
