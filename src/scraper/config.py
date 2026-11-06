@@ -65,7 +65,12 @@ LOCALITIES_BY_PROVINCE = {
         "Almagro",
     ),
     "Córdoba": (),
-    "Cuenca": (),
+    "Cuenca": (
+        "Campillo de Altobuey", "Cuenca", "Horcajo de Santiago",
+        "Las Pedroñeras", "Mota del Cuervo", "Quintanar del Rey",
+        "San Clemente", "Tarancón", "Villaescusa de Haro",
+        "Villamayor de Santiago",
+    ),
     "Girona": (),
     "Granada": (),
     "Guadalajara": (
