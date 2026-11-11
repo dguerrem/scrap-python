@@ -87,7 +87,10 @@ LOCALITIES_BY_PROVINCE = {
         "Lepe", "Moguer", "La Palma del Condado", "Punta Umbría",
         "Valverde del Camino",
     ),
-    "Huesca": (),
+    "Huesca": (
+        "Barbastro", "Binéfar", "Fraga", "Huesca", "Jaca", "Monzón",
+        "Sabiñánigo", "Sariñena", "Tamarite de Litera", "Binaced",
+    ),
     "Jaén": (),
     "La Rioja": (
         "Logroño", "Calahorra", "Arnedo", "Haro", "Lardero", "Alfaro",
@@ -108,7 +111,11 @@ LOCALITIES_BY_PROVINCE = {
     "Madrid": ("Madrid",),
     "Málaga": ("Málaga",),
     "Murcia": ("Murcia",),
-    "Navarra": (),
+    "Navarra": (
+        "Ansoáin", "Barañáin", "Berriozar", "Burlada",
+        "Estella-Lizarra", "Pamplona", "Tafalla", "Tudela",
+        "Valle de Egüés", "Zizur Mayor",
+    ),
     "Ourense": (
         "A Rúa", "Allariz", "Barbadás", "Celanova", "O Barco de Valdeorras",
         "O Carballiño", "Ourense", "Ribadavia", "Verín", "Xinzo de Limia",
@@ -159,7 +166,11 @@ LOCALITIES_BY_PROVINCE = {
         "Morales del Vino", "Puebla de Sanabria", "Toro", "Villalpando",
         "Zamora",
     ),
-    "Zaragoza": ("Zaragoza",),
+    "Zaragoza": (
+        "Alagón", "Calatayud", "Caspe", "Cuarte de Huerva",
+        "Ejea de los Caballeros", "La Almunia de Doña Godina",
+        "Tarazona", "Utebo", "Villanueva de Gállego", "Zaragoza",
+    ),
 }
 
 CITIES = [
