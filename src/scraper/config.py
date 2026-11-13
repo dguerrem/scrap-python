@@ -103,7 +103,10 @@ LOCALITIES_BY_PROVINCE = {
         "San Andrés del Rabanedo", "Sariegos", "Valencia de Don Juan",
         "Valverde de la Virgen", "Villaquilambre", "Villablino",
     ),
-    "Lleida": (),
+    "Lleida": (
+        "Alcarràs", "Balaguer", "Cervera", "La Seu d'Urgell", "Lleida",
+        "Les Borges Blanques", "Mollerussa", "Solsona", "Tàrrega", "Vielha",
+    ),
     "Lugo": (
         "Burela", "Chantada", "Foz", "Guitiriz", "Lugo",
         "Monforte de Lemos", "Ribadeo", "Sarria", "Vilalba", "Viveiro",
@@ -143,14 +146,21 @@ LOCALITIES_BY_PROVINCE = {
         "Real Sitio de San Ildefonso", "La Lastrilla", "San Cristóbal de Segovia",
         "Cantalejo", "Nava de la Asunción", "Carbonero el Mayor",
     ),
-    "Sevilla": ("Sevilla",),
+    "Sevilla": (
+        "Alcalá de Guadaíra", "Camas", "Coria del Río", "Dos Hermanas",
+        "Écija", "La Rinconada", "Los Palacios y Villafranca", "Mairena del Aljarafe",
+        "Sevilla", "Utrera",
+    ),
     "Soria": (
         "Soria", "Almazán", "El Burgo de Osma", "Ólvega", "Ágreda",
         "San Esteban de Gormaz", "San Leonardo de Yagüe", "Golmayo",
         "Duruelo de la Sierra", "Arcos de Jalón",
     ),
     "Tarragona": (),
-    "Teruel": (),
+    "Teruel": (
+        "Alcañiz", "Andorra", "Calamocha", "Calanda", "Cella",
+        "Híjar", "Monreal del Campo", "Teruel", "Utrillas", "Valderrobres",
+    ),
     "Toledo": (
         "Toledo", "Talavera de la Reina", "Illescas", "Seseña", "Torrijos",
         "Fuensalida", "Yuncos", "Ocaña", "Quintanar de la Orden", "Mora",
