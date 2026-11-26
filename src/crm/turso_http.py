@@ -40,8 +40,9 @@ class Row:
 class _Cursor:
     """Minimal DB-API 2.0 cursor."""
 
-    def __init__(self, rows: list):
+    def __init__(self, rows: list, rowcount: int = -1):
         self._rows = rows
+        self.rowcount = rowcount
 
     def fetchall(self) -> list:
         return self._rows
@@ -115,14 +116,18 @@ class TursoConnection:
     def executemany(self, sql: str, seq_of_params) -> _Cursor:
         """Run the same SQL with many parameter sets (batched)."""
         params_list = list(seq_of_params)
+        affected = 0
         for i in range(0, len(params_list), _CHUNK):
             chunk = params_list[i : i + _CHUNK]
             stmts = [
                 {"sql": sql, "args": [_to_arg(p) for p in params]}
                 for params in chunk
             ]
-            self._pipeline(stmts)
-        return _Cursor([])
+            affected += sum(
+                max(0, int(result.get("affected_row_count", 0)))
+                for result in self._pipeline(stmts)
+            )
+        return _Cursor([], affected)
 
     def commit(self):
         pass  # HTTP auto-commits each statement
@@ -169,4 +174,4 @@ class TursoConnection:
         for raw in result.get("rows", []):
             vals = [_from_cell(cell) for cell in raw]
             rows.append(Row(cols, vals) if self.row_factory else tuple(vals))
-        return _Cursor(rows)
+        return _Cursor(rows, int(result.get("affected_row_count", -1)))

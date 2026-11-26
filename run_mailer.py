@@ -55,7 +55,6 @@ def cmd_gate() -> int:
     activo = False
     motivo = "mailer apagado"
     try:
-        store.asegurar_esquema()
         activo = store.get_setting("activo", "0") == "1"
     except Exception as e:
         # Sin acceso a la base de datos tampoco se puede enviar. Se avisa,

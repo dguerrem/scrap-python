@@ -144,16 +144,15 @@ def registrar_ledger(dominio: str, email: str, lead_id=None) -> bool:
     nunca se manda dos veces al mismo sitio.
     """
     conn = get_conn()
-    antes = conn.execute("SELECT COUNT(*) FROM email_ledger").fetchone()[0]
-    conn.execute(
+    cursor = conn.execute(
         "INSERT OR IGNORE INTO email_ledger (dominio, email, lead_id, enviado_at) "
-        "VALUES (?, ?, ?, ?)",
+        "VALUES (?, ?, ?, ?) RETURNING id",
         (dominio, email, lead_id, a_texto(ahora())),
     )
-    despues = conn.execute("SELECT COUNT(*) FROM email_ledger").fetchone()[0]
+    inserted = cursor.fetchone() is not None
     conn.commit()
     conn.close()
-    return despues > antes
+    return inserted
 
 
 def olvidar_ledger(dominio: str) -> bool:
@@ -164,12 +163,13 @@ def olvidar_ledger(dominio: str) -> bool:
     veces a la misma puerta.
     """
     conn = get_conn()
-    antes = conn.execute("SELECT COUNT(*) FROM email_ledger").fetchone()[0]
-    conn.execute("DELETE FROM email_ledger WHERE dominio = ?", (dominio,))
-    despues = conn.execute("SELECT COUNT(*) FROM email_ledger").fetchone()[0]
+    cursor = conn.execute(
+        "DELETE FROM email_ledger WHERE dominio = ? RETURNING id", (dominio,)
+    )
+    deleted = cursor.fetchone() is not None
     conn.commit()
     conn.close()
-    return despues < antes
+    return deleted
 
 
 def en_supresion(dominio: str) -> bool:
@@ -224,20 +224,19 @@ def encolar(lead_id: int, destinatario: str, asunto: str,
         return False
 
     conn = get_conn()
-    antes = conn.execute("SELECT COUNT(*) FROM email_queue").fetchone()[0]
     # El índice único parcial sobre (dominio) para estados pending/sending
     # impide encolar dos veces la misma clínica aunque llamemos dos veces.
-    conn.execute(
+    cursor = conn.execute(
         "INSERT OR IGNORE INTO email_queue "
         "(lead_id, destinatario, dominio, asunto, cuerpo_texto, cuerpo_html, "
-        " estado, created_at) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)",
+        " estado, created_at) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?) RETURNING id",
         (lead_id, destinatario, clave, asunto, cuerpo_texto, cuerpo_html,
          a_texto(ahora())),
     )
-    despues = conn.execute("SELECT COUNT(*) FROM email_queue").fetchone()[0]
+    inserted = cursor.fetchone() is not None
     conn.commit()
     conn.close()
-    return despues > antes
+    return inserted
 
 
 def claim() -> dict | None:

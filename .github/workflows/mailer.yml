@@ -68,7 +68,3 @@ jobs:
           if [ "${{ inputs.forzar }}" = "true" ]; then ARGS="$ARGS --force"; fi
           python run_mailer.py $ARGS
 
-      - name: Revisar autonomía y avisos
-        if: steps.gate.outputs.activo == '1' || inputs.forzar
-        continue-on-error: true
-        run: python run_mailer.py --autonomy

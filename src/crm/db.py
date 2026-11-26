@@ -131,6 +131,12 @@ def init_db():
             orden     INTEGER DEFAULT 100
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS crm_meta (
+            clave TEXT PRIMARY KEY,
+            valor TEXT NOT NULL DEFAULT ''
+        )
+    """)
     seed_app_links(conn)
     _init_mailer_schema(conn)
     # Migraciones: añadir columnas a tablas ya existentes
@@ -143,15 +149,31 @@ def init_db():
         # la calculará en el siguiente arranque.
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_dedup_key "
         "ON leads(dedup_key) WHERE dedup_key != ''",
+        "CREATE INDEX IF NOT EXISTS idx_leads_missing_dedup "
+        "ON leads(id) WHERE dedup_key IS NULL OR dedup_key = ''",
         "CREATE INDEX IF NOT EXISTS idx_leads_etapa_puntuacion "
         "ON leads(etapa, puntuacion DESC, resenas DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_leads_email_directo_contactable "
+        "ON leads(email_directo) WHERE email_directo IS NOT NULL "
+        "AND email_directo != '' AND etapa != 'Descartado'",
+        "CREATE INDEX IF NOT EXISTS idx_leads_email_generico_contactable "
+        "ON leads(email_generico) WHERE email_generico IS NOT NULL "
+        "AND email_generico != '' AND etapa != 'Descartado'",
     ]:
         try:
             conn.execute(stmt)
         except Exception:
             pass  # columna ya existe
-    repair_invalid_stages(conn)
-    backfill_dedup_keys(conn)
+    repairs_done = conn.execute(
+        "SELECT 1 FROM crm_meta WHERE clave = ? LIMIT 1", ("data_repairs_v1",)
+    ).fetchone()
+    if not repairs_done:
+        repair_invalid_stages(conn)
+        backfill_dedup_keys(conn)
+        conn.execute(
+            "INSERT OR IGNORE INTO crm_meta (clave, valor) VALUES (?, ?)",
+            ("data_repairs_v1", "done"),
+        )
     conn.commit()
     conn.close()
 
@@ -412,7 +434,9 @@ def import_leads(leads: list[dict], perfil_origen: str = "") -> int:
 
     existing_keys = {
         r["dedup_key"]
-        for r in conn.execute("SELECT dedup_key FROM leads").fetchall()
+        for r in conn.execute(
+            "SELECT dedup_key FROM leads WHERE dedup_key IS NOT NULL AND dedup_key != ''"
+        ).fetchall()
     }
 
     new_leads = []
@@ -459,12 +483,12 @@ def import_leads(leads: list[dict], perfil_origen: str = "") -> int:
         for l, nombre, key in new_leads
     ]
 
-    antes = conn.execute("SELECT COUNT(*) FROM leads").fetchone()[0]
-    conn.executemany(sql, params_list)
+    cursor = conn.executemany(sql, params_list)
     conn.commit()
-    despues = conn.execute("SELECT COUNT(*) FROM leads").fetchone()[0]
     conn.close()
-    return despues - antes
+    # Las claves se filtraron previamente; conexiones simuladas antiguas pueden
+    # no exponer rowcount, en cuyo caso el lote preparado es el mejor recuento.
+    return cursor.rowcount if cursor.rowcount >= 0 else len(new_leads)
 
 
 def import_from_json(json_path: str | Path, perfil_origen: str = "") -> int:
@@ -610,7 +634,7 @@ def seed_app_links(conn=None) -> int:
     own_conn = conn is None
     conn = conn or get_conn()
     try:
-        existe = conn.execute("SELECT COUNT(*) FROM app_links").fetchone()[0]
+        existe = conn.execute("SELECT 1 FROM app_links LIMIT 1").fetchone()
     except Exception:
         if own_conn:
             conn.close()
@@ -677,20 +701,19 @@ def delete_app_link(link_id: int):
 def get_stats() -> dict:
     """Estadísticas del pipeline."""
     conn = get_conn()
-    total = conn.execute("SELECT COUNT(*) FROM leads").fetchone()[0]
-    with_email = conn.execute(
-        "SELECT COUNT(*) FROM leads WHERE email_directo != '' OR email_generico != ''"
-    ).fetchone()[0]
-    with_director = conn.execute(
-        "SELECT COUNT(*) FROM leads WHERE director != ''"
-    ).fetchone()[0]
-
-    by_stage = {}
-    for stage in PIPELINE_STAGES:
-        count = conn.execute(
-            "SELECT COUNT(*) FROM leads WHERE etapa = ?", (stage,)
-        ).fetchone()[0]
-        by_stage[stage] = count
+    expressions = [
+        "COUNT(*)",
+        "SUM(CASE WHEN email_directo != '' OR email_generico != '' THEN 1 ELSE 0 END)",
+        "SUM(CASE WHEN director != '' THEN 1 ELSE 0 END)",
+    ]
+    expressions.extend(
+        f"SUM(CASE WHEN etapa = '{stage}' THEN 1 ELSE 0 END)"
+        for stage in PIPELINE_STAGES
+    )
+    row = conn.execute(f"SELECT {', '.join(expressions)} FROM leads").fetchone()
+    values = [int(value or 0) for value in row]
+    total, with_email, with_director = values[:3]
+    by_stage = dict(zip(PIPELINE_STAGES, values[3:]))
 
     conn.close()
     return {
